@@ -62,6 +62,3 @@ npm run build
 \`\`\`
 The build output will be placed in the \`dist\` directory, which you can then serve using any static site hosting service.
 
-## License
-
-This project is licensed under the MIT License.
