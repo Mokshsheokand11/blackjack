@@ -310,7 +310,6 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight uppercase">BlackJack</h1>
-            <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-mono">Premium Casino Experience</p>
           </div>
         </div>
 
