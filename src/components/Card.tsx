@@ -2,6 +2,7 @@ import React from 'react';
 import { Card as CardType } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { motion } from 'motion/react';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -23,45 +24,55 @@ const SuitIcon = ({ suit }: { suit: CardType['suit'] }) => {
 };
 
 export const Card: React.FC<CardProps> = ({ card, className, hidden }) => {
-  if (hidden) {
-    return (
-      <div className={cn(
-        "w-24 h-36 bg-indigo-900 rounded-lg border-2 border-white/20 shadow-xl flex items-center justify-center relative overflow-hidden",
-        "before:absolute before:inset-2 before:border before:border-white/10 before:rounded-md",
-        "after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] after:from-white/5",
-        className
-      )}>
-        <div className="text-white/20 text-4xl font-bold rotate-45 select-none">G</div>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn(
-      "w-24 h-36 bg-white rounded-lg border border-gray-200 shadow-lg flex flex-col p-2 relative select-none transition-transform hover:-translate-y-1",
-      className
-    )}>
-      <div className="flex justify-between items-start">
-        <div className={cn("text-lg font-bold leading-none", card.suit === 'hearts' || card.suit === 'diamonds' ? 'text-red-500' : 'text-black')}>
-          {card.rank}
+    <div className={cn("relative w-24 h-36 perspective-[1000px]", !hidden && "transition-transform hover:-translate-y-1", className)}>
+      <motion.div
+        className="w-full h-full relative"
+        initial={false}
+        animate={{ rotateY: hidden ? 180 : 0 }}
+        transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}
+        style={{ transformStyle: 'preserve-3d' }}
+      >
+        {/* Front of Card */}
+        <div
+          className="absolute inset-0 w-full h-full bg-white rounded-lg border border-gray-200 shadow-lg flex flex-col p-2 select-none"
+          style={{ backfaceVisibility: 'hidden' }}
+        >
+          <div className="flex justify-between items-start">
+            <div className={cn("text-lg font-bold leading-none", card.suit === 'hearts' || card.suit === 'diamonds' ? 'text-red-500' : 'text-black')}>
+              {card.rank}
+            </div>
+            <div className="text-sm">
+              <SuitIcon suit={card.suit} />
+            </div>
+          </div>
+
+          <div className="flex-1 flex items-center justify-center text-3xl">
+            <SuitIcon suit={card.suit} />
+          </div>
+
+          <div className="flex justify-between items-end rotate-180">
+            <div className={cn("text-lg font-bold leading-none", card.suit === 'hearts' || card.suit === 'diamonds' ? 'text-red-500' : 'text-black')}>
+              {card.rank}
+            </div>
+            <div className="text-sm">
+              <SuitIcon suit={card.suit} />
+            </div>
+          </div>
         </div>
-        <div className="text-sm">
-          <SuitIcon suit={card.suit} />
+
+        {/* Back of Card */}
+        <div
+          className={cn(
+            "absolute inset-0 w-full h-full bg-indigo-900 rounded-lg border-2 border-white/20 shadow-xl flex items-center justify-center overflow-hidden",
+            "before:absolute before:inset-2 before:border before:border-white/10 before:rounded-md",
+            "after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] after:from-white/5"
+          )}
+          style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+        >
+          <div className="text-white/20 text-4xl font-bold rotate-45 select-none">G</div>
         </div>
-      </div>
-      
-      <div className="flex-1 flex items-center justify-center text-3xl">
-        <SuitIcon suit={card.suit} />
-      </div>
-      
-      <div className="flex justify-between items-end rotate-180">
-        <div className={cn("text-lg font-bold leading-none", card.suit === 'hearts' || card.suit === 'diamonds' ? 'text-red-500' : 'text-black')}>
-          {card.rank}
-        </div>
-        <div className="text-sm">
-          <SuitIcon suit={card.suit} />
-        </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
