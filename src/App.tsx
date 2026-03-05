@@ -30,8 +30,23 @@ export default function App() {
     consecutiveAllIns: 0,
   });
 
-  const [betInput, setBetInput] = useState<number>(1000);
+  const [betChips, setBetChips] = useState<number[]>([]);
+  const betInput = betChips.reduce((sum, chip) => sum + chip, 0);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleAddChip = (amount: number) => {
+    if (betInput + amount <= gameState.balance) {
+      setBetChips(prev => [...prev, amount]);
+    }
+  };
+
+  const handleUndoChip = () => {
+    setBetChips(prev => prev.slice(0, -1));
+  };
+
+  const handleAllIn = () => {
+    setBetChips([gameState.balance]);
+  };
 
   // Helper to update game state
   const updateState = (updates: Partial<GameState>) => {
@@ -314,6 +329,7 @@ export default function App() {
   };
 
   const resetGame = () => {
+    setBetChips([]);
     if (gameState.balance < MIN_BET) {
       updateState({
         balance: INITIAL_BALANCE,
@@ -464,48 +480,72 @@ export default function App() {
         <div className="max-w-4xl mx-auto flex flex-col gap-6">
           {gameState.status === 'betting' ? (
             <div className="flex flex-col items-center gap-6">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setBetInput(Math.max(MIN_BET, betInput - 500))}
-                  className="w-12 h-12 rounded-xl border border-white/10 flex items-center justify-center hover:bg-white/5 active:scale-95 transition-all"
-                >
-                  <TrendingDown className="w-5 h-5 text-white/60" />
-                </button>
-
-                <div className="flex flex-col items-center min-w-[200px]">
-                  <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Current Bet</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-white/40 text-lg">₹</span>
-                    <input
-                      type="number"
-                      value={betInput}
-                      onChange={(e) => setBetInput(Math.min(gameState.balance, Math.max(0, parseInt(e.target.value) || 0)))}
-                      className="bg-transparent text-4xl font-mono font-bold text-center focus:outline-none w-full"
-                    />
+              <div className="relative h-24 w-full flex flex-col items-center justify-end mb-2">
+                <AnimatePresence>
+                  {betChips.map((chip, index) => (
+                    <motion.div
+                      key={`chip-${index}-${chip}`}
+                      initial={{ y: -50, opacity: 0, scale: 0.8 }}
+                      animate={{ y: -index * 4, opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5, y: -20 }}
+                      className={cn(
+                        "absolute w-14 h-14 rounded-full border-[4px] border-dashed border-white/20 shadow-[0_4px_10px_rgba(0,0,0,0.5)] flex items-center justify-center font-bold text-xs ring-2 ring-black",
+                        chip === 100 ? 'bg-gray-100 text-gray-900' :
+                          chip === 500 ? 'bg-red-600 text-white' :
+                            chip === 1000 ? 'bg-blue-600 text-white' :
+                              chip === 10000 ? 'bg-green-600 text-white' :
+                                chip === 25000 ? 'bg-purple-600 text-white' :
+                                  'bg-[#F27D26] text-black'
+                      )}
+                      style={{ bottom: 0, zIndex: index }}
+                    >
+                      {chip >= 1000 ? `${chip / 1000}k` : chip}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                {betChips.length === 0 && (
+                  <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/10 flex items-center justify-center absolute bottom-0">
+                    <span className="text-white/20 text-[10px] uppercase text-center leading-tight">Place<br />Chips</span>
                   </div>
-                </div>
-
-                <button
-                  onClick={() => setBetInput(Math.min(gameState.balance, betInput + 500))}
-                  className="w-12 h-12 rounded-xl border border-white/10 flex items-center justify-center hover:bg-white/5 active:scale-95 transition-all"
-                >
-                  <TrendingUp className="w-5 h-5 text-white/60" />
-                </button>
+                )}
               </div>
 
-              <div className="flex gap-2">
-                {[100, 500, 1000, 5000].map(amount => (
+              <div className="flex flex-col items-center">
+                <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Bet</p>
+                <p className="text-4xl font-mono font-bold text-[#00FF00]">₹{betInput.toLocaleString()}</p>
+              </div>
+
+              <div className="flex flex-wrap justify-center items-center gap-3">
+                <button
+                  onClick={handleUndoChip}
+                  disabled={betChips.length === 0}
+                  className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30 disabled:hover:bg-white/5"
+                >
+                  <RotateCcw className="w-5 h-5 text-white/60" />
+                </button>
+
+                {[100, 500, 1000, 10000, 25000].map(amount => (
                   <button
                     key={amount}
-                    onClick={() => setBetInput(Math.min(gameState.balance, amount))}
-                    className="px-4 py-2 rounded-full border border-white/10 text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-all"
+                    onClick={() => handleAddChip(amount)}
+                    disabled={betInput + amount > gameState.balance}
+                    className={cn(
+                      "w-12 h-12 rounded-full border-[3px] border-dashed border-white/20 font-bold text-xs tracking-tighter hover:scale-110 active:scale-95 transition-all disabled:opacity-30 disabled:hover:scale-100 ring-2 ring-transparent hover:ring-white/20",
+                      amount === 100 ? 'bg-gray-100 text-gray-900 border-gray-300' :
+                        amount === 500 ? 'bg-red-600 text-white border-red-400' :
+                          amount === 1000 ? 'bg-blue-600 text-white border-blue-400' :
+                            amount === 10000 ? 'bg-green-600 text-white border-green-400' :
+                              amount === 25000 ? 'bg-purple-600 text-white border-purple-400' : ''
+                    )}
                   >
-                    +{amount}
+                    {amount >= 1000 ? `${amount / 1000}k` : amount}
                   </button>
                 ))}
+
                 <button
-                  onClick={() => setBetInput(gameState.balance)}
-                  className="px-4 py-2 rounded-full border border-[#F27D26]/30 text-[#F27D26] text-[10px] font-bold uppercase tracking-widest hover:bg-[#F27D26]/10 transition-all"
+                  onClick={handleAllIn}
+                  disabled={betInput === gameState.balance || gameState.balance === 0}
+                  className="px-4 py-2 h-12 rounded-full border border-[#F27D26]/30 text-[#F27D26] text-[10px] font-bold uppercase tracking-widest hover:bg-[#F27D26]/10 active:scale-95 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
                 >
                   All In
                 </button>
