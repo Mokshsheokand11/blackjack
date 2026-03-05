@@ -26,7 +26,7 @@ export default function App() {
     currentBet: 0,
     status: 'betting',
     message: 'Place your bet to start!',
-    dealerCommentary: 'Welcome to Gemini Blackjack. High stakes, high rewards.',
+    dealerCommentary: 'Welcome to Blackjack. High stakes, high rewards.Go Risky or Go Home',
     consecutiveAllIns: 0,
   });
 
