@@ -17,6 +17,16 @@ export interface Hand {
 
 export type GameStatus = 'betting' | 'playing' | 'dealer-turn' | 'settled';
 
+export interface RoundResult {
+  id: string;
+  playerScore: number;
+  dealerScore: number;
+  bet: number;
+  payout: number;
+  outcome: 'win' | 'loss' | 'push' | 'blackjack';
+  timestamp: number;
+}
+
 export interface GameState {
   deck: Card[];
   playerHands: Hand[];
@@ -28,4 +38,5 @@ export interface GameState {
   message: string;
   dealerCommentary: string;
   consecutiveAllIns: number;
+  history: RoundResult[];
 }

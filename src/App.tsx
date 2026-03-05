@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card as CardComponent } from './components/Card';
-import { Card as CardType, GameState, Hand, GameStatus } from './types';
+import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info } from 'lucide-react';
+import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -26,9 +26,30 @@ export default function App() {
     currentBet: 0,
     status: 'betting',
     message: 'Place your bet to start!',
-    dealerCommentary: 'Welcome to Blackjack. High stakes, high rewards.Go Risky or Go Home',
+    dealerCommentary: 'Welcome to Blackjack. High stakes, high rewards. Go Risky or Go Home',
     consecutiveAllIns: 0,
+    history: [],
   });
+
+  // Persist balance and history
+  useEffect(() => {
+    const savedBalance = localStorage.getItem('blackjack_balance');
+    const savedStreak = localStorage.getItem('blackjack_streak');
+    const savedHistory = localStorage.getItem('blackjack_history');
+
+    setGameState(prev => ({
+      ...prev,
+      balance: savedBalance ? parseInt(savedBalance) : prev.balance,
+      consecutiveAllIns: savedStreak ? parseInt(savedStreak) : prev.consecutiveAllIns,
+      history: savedHistory ? JSON.parse(savedHistory) : prev.history
+    }));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('blackjack_balance', gameState.balance.toString());
+    localStorage.setItem('blackjack_streak', gameState.consecutiveAllIns.toString());
+    localStorage.setItem('blackjack_history', JSON.stringify(gameState.history));
+  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history]);
 
   const [betChips, setBetChips] = useState<number[]>([]);
   const betInput = betChips.reduce((sum, chip) => sum + chip, 0);
@@ -192,6 +213,56 @@ export default function App() {
     setIsProcessing(false);
   };
 
+  // Player action: Double Down
+  const handleDoubleDown = async () => {
+    const currentHand = gameState.playerHands[gameState.activeHandIndex];
+    if (
+      gameState.status !== 'playing' ||
+      isProcessing ||
+      currentHand.cards.length !== 2 ||
+      gameState.balance < gameState.currentBet
+    ) return;
+
+    setIsProcessing(true);
+    const newBet = gameState.currentBet;
+    const newBalance = gameState.balance - newBet;
+    const totalBet = gameState.currentBet + newBet;
+
+    const newDeck = [...gameState.deck];
+    const newCard = newDeck.pop()!;
+    const newCards = [...currentHand.cards, newCard];
+    const newScore = calculateScore(newCards);
+    const busted = isBusted(newScore);
+
+    const updatedHand: Hand = {
+      ...currentHand,
+      cards: newCards,
+      score: newScore,
+      isBusted: busted,
+      isStood: true,
+    };
+
+    const newPlayerHands = [...gameState.playerHands];
+    newPlayerHands[gameState.activeHandIndex] = updatedHand;
+
+    const nextHandIndex = gameState.activeHandIndex + 1;
+    const hasMoreHands = nextHandIndex < newPlayerHands.length;
+
+    updateState({
+      deck: newDeck,
+      playerHands: newPlayerHands,
+      activeHandIndex: hasMoreHands ? nextHandIndex : gameState.activeHandIndex,
+      balance: newBalance,
+      currentBet: totalBet,
+      status: hasMoreHands ? 'playing' : 'dealer-turn',
+      message: busted ? 'Busted!' : (hasMoreHands ? `Hand ${nextHandIndex + 1}'s turn` : 'Dealer\'s turn...'),
+    });
+
+    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'double', newBalance, totalBet);
+    updateState({ dealerCommentary: commentary });
+    setIsProcessing(false);
+  };
+
   // Player action: Split
   const handleSplit = async () => {
     const currentHand = gameState.playerHands[gameState.activeHandIndex];
@@ -316,11 +387,27 @@ export default function App() {
     }
 
     const finalBalance = gameState.balance + totalPayout;
+
+    // Add to history
+    const mainHand = newPlayerHands[0];
+    const outcome = mainHand.isBlackjack ? 'blackjack' : (totalPayout > gameState.currentBet ? 'win' : (totalPayout === gameState.currentBet ? 'push' : 'loss'));
+
+    const newHistoryEntry: RoundResult = {
+      id: Math.random().toString(36).substr(2, 9),
+      playerScore: mainHand.score,
+      dealerScore: finalDealerHand.score,
+      bet: gameState.currentBet,
+      payout: totalPayout,
+      outcome,
+      timestamp: Date.now()
+    };
+
     updateState({
       playerHands: newPlayerHands,
       balance: finalBalance,
       status: 'settled',
       message: totalPayout > 0 ? `You won ${totalPayout} Rs!` : 'Better luck next time.',
+      history: [newHistoryEntry, ...gameState.history].slice(0, 10),
     });
 
     const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet);
@@ -369,7 +456,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 p-8 flex flex-col gap-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 md:p-8 flex flex-col gap-4 md:gap-6 max-w-7xl mx-auto w-full justify-center">
         {/* Dealer Area */}
         <section className="flex flex-col items-center gap-4">
           <div className="relative">
@@ -381,7 +468,7 @@ export default function App() {
 
             <div className="flex gap-4 min-h-[150px] items-center justify-center">
               <AnimatePresence mode="popLayout">
-                {gameState.dealerHand.cards.map((card, idx) => (
+                {gameState.status !== 'betting' && gameState.dealerHand.cards.map((card, idx) => (
                   <motion.div
                     key={`dealer-${idx}-${card.rank}-${card.suit}`}
                     initial={{ opacity: 0, y: -50, rotate: -10 }}
@@ -395,11 +482,6 @@ export default function App() {
                   </motion.div>
                 ))}
               </AnimatePresence>
-              {gameState.dealerHand.cards.length === 0 && (
-                <div className="w-24 h-36 border-2 border-dashed border-white/10 rounded-lg flex items-center justify-center text-white/10">
-                  <HandIcon className="w-8 h-8" />
-                </div>
-              )}
             </div>
 
             {gameState.dealerHand.cards.length > 0 && (
@@ -424,148 +506,162 @@ export default function App() {
         </section>
 
         {/* Game Message */}
-        <div className="text-center py-4">
-          <h2 className="text-3xl font-bold tracking-tighter uppercase italic text-[#F27D26]">
+        <div className="text-center py-1">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tighter uppercase italic text-[#F27D26]">
             {gameState.message}
           </h2>
         </div>
 
-        {/* Player Area */}
-        <section className="flex flex-col items-center gap-8">
-          <div className="flex flex-wrap justify-center gap-12">
-            {gameState.playerHands.map((hand, hIdx) => (
-              <div key={hIdx} className={cn(
-                "flex flex-col items-center gap-4 p-6 rounded-3xl transition-all duration-500",
-                gameState.activeHandIndex === hIdx && gameState.status === 'playing' ? "bg-white/5 ring-1 ring-[#F27D26]/50 shadow-[0_0_40px_rgba(242,125,38,0.1)]" : "opacity-60"
-              )}>
-                <div className="relative flex gap-4 min-h-[150px]">
-                  <AnimatePresence mode="popLayout">
-                    {hand.cards.map((card, cIdx) => (
-                      <motion.div
-                        key={`player-${hIdx}-${cIdx}-${card.rank}-${card.suit}`}
-                        initial={{ opacity: 0, y: 50, rotate: 10 }}
-                        animate={{ opacity: 1, y: 0, rotate: 0 }}
-                        transition={{ delay: cIdx * 0.1 }}
-                      >
-                        <CardComponent card={card} />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                  {hand.cards.length === 0 && (
-                    <div className="w-24 h-36 border-2 border-dashed border-white/10 rounded-lg flex items-center justify-center text-white/10">
-                      <HandIcon className="w-8 h-8" />
+        {/* Betting Central Area */}
+        {gameState.status === 'betting' && (
+          <section className="flex-1 flex flex-col items-center justify-center gap-8 py-8 animate-in fade-in zoom-in duration-500">
+            <div className="relative h-32 w-full flex flex-col items-center justify-end">
+              <AnimatePresence>
+                {betChips.map((chip, index) => (
+                  <motion.div
+                    key={`chip-main-${index}-${chip}`}
+                    initial={{ y: -100, opacity: 0, scale: 0.5 }}
+                    animate={{ y: -index * 4, opacity: 1, scale: 1.2 }}
+                    exit={{ opacity: 0, scale: 0.5, y: 50 }}
+                    className={cn(
+                      "absolute w-16 h-16 rounded-full border-[4px] border-dashed border-white/20 shadow-[0_10px_20px_rgba(0,0,0,0.5)] flex items-center justify-center font-bold text-sm ring-2 ring-black",
+                      chip === 100 ? 'bg-gray-100 text-gray-900' :
+                        chip === 500 ? 'bg-red-600 text-white' :
+                          chip === 1000 ? 'bg-blue-600 text-white' :
+                            chip === 10000 ? 'bg-green-600 text-white' :
+                              chip === 25000 ? 'bg-purple-600 text-white' :
+                                'bg-[#F27D26] text-black'
+                    )}
+                    style={{ bottom: 0, zIndex: index }}
+                  >
+                    {chip >= 1000 ? `${chip / 1000}k` : chip}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs text-white/40 uppercase tracking-[0.3em]">Total Bet Amount</p>
+              <motion.p
+                key={betInput}
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                className="text-6xl font-mono font-bold text-[#00FF00]"
+              >
+                ₹{betInput.toLocaleString()}
+              </motion.p>
+            </div>
+
+            <div className="flex flex-wrap justify-center items-center gap-4">
+              <button
+                onClick={handleUndoChip}
+                disabled={betChips.length === 0}
+                title="Undo last chip"
+                className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30"
+              >
+                <RotateCcw className="w-6 h-6 text-white/60" />
+              </button>
+
+              {[100, 500, 1000, 10000, 25000].map(amount => (
+                <button
+                  key={amount}
+                  onClick={() => handleAddChip(amount)}
+                  disabled={betInput + amount > gameState.balance}
+                  className={cn(
+                    "w-14 h-14 rounded-full border-[3px] border-dashed border-white/20 font-bold text-sm hover:scale-110 active:scale-95 transition-all disabled:opacity-30 ring-2 ring-transparent hover:ring-white/40",
+                    amount === 100 ? 'bg-gray-100 text-gray-900 border-gray-300 shadow-[0_5px_15px_rgba(255,255,255,0.1)]' :
+                      amount === 500 ? 'bg-red-600 text-white border-red-400 shadow-[0_5px_15px_rgba(220,38,38,0.2)]' :
+                        amount === 1000 ? 'bg-blue-600 text-white border-blue-400 shadow-[0_5px_15px_rgba(37,99,235,0.2)]' :
+                          amount === 10000 ? 'bg-green-600 text-white border-green-400 shadow-[0_5_15px_rgba(16,185,129,0.2)]' :
+                            amount === 25000 ? 'bg-purple-600 text-white border-purple-400 shadow-[0_5px_15px_rgba(147,51,234,0.2)]' : ''
+                  )}
+                >
+                  {amount >= 1000 ? `${amount / 1000}k` : amount}
+                </button>
+              ))}
+
+              <button
+                onClick={handleAllIn}
+                disabled={betInput === gameState.balance || gameState.balance === 0}
+                className="px-6 py-2 h-14 rounded-full border-2 border-[#F27D26]/30 text-[#F27D26] text-xs font-bold uppercase tracking-widest hover:bg-[#F27D26]/10 active:scale-95 transition-all disabled:opacity-30"
+              >
+                All In
+              </button>
+            </div>
+
+            <button
+              onClick={startRound}
+              disabled={isProcessing || betInput < MIN_BET || betInput > gameState.balance}
+              className="w-full max-w-sm py-5 bg-[#F27D26] text-black font-extrabold uppercase tracking-[0.3em] rounded-2xl flex items-center justify-center gap-4 hover:bg-[#ff8c3a] disabled:opacity-20 shadow-[0_15px_40px_rgba(242,125,38,0.4)] transition-all active:scale-[0.98] mt-4"
+            >
+              <Play className="w-6 h-6 fill-current" />
+              Deal Cards
+            </button>
+          </section>
+        )}
+
+        {/* Player Area - ONLY show if not betting */}
+        {gameState.status !== 'betting' && (
+          <section className="flex flex-col items-center gap-8">
+            <div className="flex flex-wrap justify-center gap-12">
+              {gameState.playerHands.map((hand, hIdx) => (
+                <div key={hIdx} className={cn(
+                  "flex flex-col items-center gap-4 p-6 rounded-3xl transition-all duration-500",
+                  gameState.activeHandIndex === hIdx && gameState.status === 'playing' ? "bg-white/5 ring-1 ring-[#F27D26]/50 shadow-[0_0_40px_rgba(242,125,38,0.1)]" : "opacity-60"
+                )}>
+                  <div className="relative flex gap-4 min-h-[150px]">
+                    <AnimatePresence mode="popLayout">
+                      {hand.cards.map((card, cIdx) => (
+                        <motion.div
+                          key={`player-${hIdx}-${cIdx}-${card.rank}-${card.suit}`}
+                          initial={{ opacity: 0, y: 50, rotate: 10 }}
+                          animate={{ opacity: 1, y: 0, rotate: 0 }}
+                          transition={{ delay: cIdx * 0.1 }}
+                        >
+                          <CardComponent card={card} />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+
+                  {hand.cards.length > 0 && (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="bg-black border border-white/20 px-4 py-1 rounded-full text-sm font-mono font-bold">
+                        {hand.score}
+                      </div>
+                      {hand.isBusted && <span className="text-red-500 text-[10px] font-bold uppercase tracking-widest">Busted</span>}
+                      {hand.isBlackjack && <span className="text-[#00FF00] text-[10px] font-bold uppercase tracking-widest">Blackjack</span>}
+                      {/* @ts-ignore */}
+                      {hand.resultMessage && <span className="text-[#F27D26] text-xs font-bold uppercase tracking-widest mt-1">{hand.resultMessage}</span>}
                     </div>
                   )}
                 </div>
-
-                {hand.cards.length > 0 && (
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="bg-black border border-white/20 px-4 py-1 rounded-full text-sm font-mono font-bold">
-                      {hand.score}
-                    </div>
-                    {hand.isBusted && <span className="text-red-500 text-[10px] font-bold uppercase tracking-widest">Busted</span>}
-                    {hand.isBlackjack && <span className="text-[#00FF00] text-[10px] font-bold uppercase tracking-widest">Blackjack</span>}
-                    {/* @ts-ignore */}
-                    {hand.resultMessage && <span className="text-[#F27D26] text-xs font-bold uppercase tracking-widest mt-1">{hand.resultMessage}</span>}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
       {/* Controls Footer */}
-      <footer className="p-8 bg-black/80 backdrop-blur-xl border-t border-white/10 sticky bottom-0 z-50">
-        <div className="max-w-4xl mx-auto flex flex-col gap-6">
+      <footer className="p-4 md:p-8 bg-black/80 backdrop-blur-xl border-t border-white/10 sticky bottom-0 z-50">
+        <div className="max-w-4xl mx-auto flex flex-col gap-4">
           {gameState.status === 'betting' ? (
-            <div className="flex flex-col items-center gap-6">
-              <div className="relative h-24 w-full flex flex-col items-center justify-end mb-2">
-                <AnimatePresence>
-                  {betChips.map((chip, index) => (
-                    <motion.div
-                      key={`chip-${index}-${chip}`}
-                      initial={{ y: -50, opacity: 0, scale: 0.8 }}
-                      animate={{ y: -index * 4, opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.5, y: -20 }}
-                      className={cn(
-                        "absolute w-14 h-14 rounded-full border-[4px] border-dashed border-white/20 shadow-[0_4px_10px_rgba(0,0,0,0.5)] flex items-center justify-center font-bold text-xs ring-2 ring-black",
-                        chip === 100 ? 'bg-gray-100 text-gray-900' :
-                          chip === 500 ? 'bg-red-600 text-white' :
-                            chip === 1000 ? 'bg-blue-600 text-white' :
-                              chip === 10000 ? 'bg-green-600 text-white' :
-                                chip === 25000 ? 'bg-purple-600 text-white' :
-                                  'bg-[#F27D26] text-black'
-                      )}
-                      style={{ bottom: 0, zIndex: index }}
-                    >
-                      {chip >= 1000 ? `${chip / 1000}k` : chip}
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                {betChips.length === 0 && (
-                  <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/10 flex items-center justify-center absolute bottom-0">
-                    <span className="text-white/20 text-[10px] uppercase text-center leading-tight">Place<br />Chips</span>
-                  </div>
-                )}
+            <div className="flex justify-center items-center gap-8 py-2">
+              <div className="text-center">
+                <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Your Balance</p>
+                <p className="text-xl font-mono font-bold text-[#00FF00]">₹{gameState.balance.toLocaleString()}</p>
               </div>
-
-              <div className="flex flex-col items-center">
-                <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Bet</p>
-                <p className="text-4xl font-mono font-bold text-[#00FF00]">₹{betInput.toLocaleString()}</p>
+              <div className="h-8 w-px bg-white/10" />
+              <div className="text-center text-white/60 text-[10px] uppercase tracking-widest">
+                Select your chips and play
               </div>
-
-              <div className="flex flex-wrap justify-center items-center gap-3">
-                <button
-                  onClick={handleUndoChip}
-                  disabled={betChips.length === 0}
-                  className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30 disabled:hover:bg-white/5"
-                >
-                  <RotateCcw className="w-5 h-5 text-white/60" />
-                </button>
-
-                {[100, 500, 1000, 10000, 25000].map(amount => (
-                  <button
-                    key={amount}
-                    onClick={() => handleAddChip(amount)}
-                    disabled={betInput + amount > gameState.balance}
-                    className={cn(
-                      "w-12 h-12 rounded-full border-[3px] border-dashed border-white/20 font-bold text-xs tracking-tighter hover:scale-110 active:scale-95 transition-all disabled:opacity-30 disabled:hover:scale-100 ring-2 ring-transparent hover:ring-white/20",
-                      amount === 100 ? 'bg-gray-100 text-gray-900 border-gray-300' :
-                        amount === 500 ? 'bg-red-600 text-white border-red-400' :
-                          amount === 1000 ? 'bg-blue-600 text-white border-blue-400' :
-                            amount === 10000 ? 'bg-green-600 text-white border-green-400' :
-                              amount === 25000 ? 'bg-purple-600 text-white border-purple-400' : ''
-                    )}
-                  >
-                    {amount >= 1000 ? `${amount / 1000}k` : amount}
-                  </button>
-                ))}
-
-                <button
-                  onClick={handleAllIn}
-                  disabled={betInput === gameState.balance || gameState.balance === 0}
-                  className="px-4 py-2 h-12 rounded-full border border-[#F27D26]/30 text-[#F27D26] text-[10px] font-bold uppercase tracking-widest hover:bg-[#F27D26]/10 active:scale-95 transition-all disabled:opacity-30 disabled:hover:bg-transparent"
-                >
-                  All In
-                </button>
-              </div>
-
-              <button
-                onClick={startRound}
-                disabled={isProcessing || betInput < MIN_BET || betInput > gameState.balance}
-                className="w-full max-w-sm py-4 bg-[#F27D26] text-black font-bold uppercase tracking-[0.2em] rounded-2xl flex items-center justify-center gap-3 hover:bg-[#ff8c3a] disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_10px_30px_rgba(242,125,38,0.3)] transition-all active:scale-[0.98]"
-              >
-                <Play className="w-5 h-5 fill-current" />
-                Deal Cards
-              </button>
             </div>
           ) : gameState.status === 'playing' ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <button
                 onClick={handleHit}
                 disabled={isProcessing}
-                className="py-4 bg-white text-black font-bold uppercase tracking-widest rounded-2xl flex flex-col items-center gap-1 hover:bg-gray-200 transition-all active:scale-95"
+                className="py-4 bg-white text-black font-bold uppercase tracking-widest rounded-xl flex flex-col items-center gap-1 hover:bg-gray-200 transition-all active:scale-95 shadow-lg"
               >
                 <HandIcon className="w-5 h-5" />
                 <span>Hit</span>
@@ -574,24 +670,33 @@ export default function App() {
               <button
                 onClick={handleStand}
                 disabled={isProcessing}
-                className="py-4 bg-[#151619] border border-white/20 text-white font-bold uppercase tracking-widest rounded-2xl flex flex-col items-center gap-1 hover:bg-white/5 transition-all active:scale-95"
+                className="py-4 bg-[#151619] border border-white/20 text-white font-bold uppercase tracking-widest rounded-xl flex flex-col items-center gap-1 hover:bg-white/5 transition-all active:scale-95 shadow-lg"
               >
                 <Square className="w-5 h-5 fill-current" />
                 <span>Stand</span>
               </button>
 
               <button
+                onClick={handleDoubleDown}
+                disabled={isProcessing || gameState.playerHands[gameState.activeHandIndex].cards.length !== 2 || gameState.balance < gameState.currentBet}
+                className="py-4 bg-[#F27D26] text-black font-bold uppercase tracking-widest rounded-xl flex flex-col items-center gap-1 hover:bg-[#ff8c3a] disabled:opacity-20 transition-all active:scale-95 shadow-lg"
+              >
+                <TrendingUp className="w-5 h-5" />
+                <span>Double</span>
+              </button>
+
+              <button
                 onClick={handleSplit}
                 disabled={isProcessing || gameState.playerHands[gameState.activeHandIndex].cards.length !== 2 || gameState.playerHands[gameState.activeHandIndex].cards[0].rank !== gameState.playerHands[gameState.activeHandIndex].cards[1].rank || gameState.balance < gameState.currentBet}
-                className="py-4 bg-[#151619] border border-white/20 text-white font-bold uppercase tracking-widest rounded-2xl flex flex-col items-center gap-1 hover:bg-white/5 disabled:opacity-20 transition-all active:scale-95"
+                className="py-4 bg-[#151619] border border-white/20 text-white font-bold uppercase tracking-widest rounded-xl flex flex-col items-center gap-1 hover:bg-white/5 disabled:opacity-20 transition-all active:scale-95 shadow-lg"
               >
                 <Split className="w-5 h-5" />
                 <span>Split</span>
               </button>
 
-              <div className="flex flex-col items-center justify-center border border-white/10 rounded-2xl bg-white/5">
+              <div className="flex flex-col items-center justify-center border border-white/10 rounded-xl bg-white/5 md:col-span-1 col-span-2">
                 <p className="text-[10px] text-white/40 uppercase tracking-widest">Active Bet</p>
-                <p className="text-xl font-mono font-bold">₹{gameState.currentBet.toLocaleString()}</p>
+                <p className="text-xl font-mono font-bold text-[#F27D26]">₹{gameState.currentBet.toLocaleString()}</p>
               </div>
             </div>
           ) : (
@@ -609,20 +714,55 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Info Overlay */}
-      <div className="fixed bottom-32 right-8 z-50 group">
-        <div className="absolute bottom-full right-0 mb-4 w-64 p-4 bg-[#151619] border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          <h4 className="text-xs font-bold uppercase tracking-widest mb-2 text-[#F27D26]">House Rules</h4>
-          <ul className="text-[10px] text-white/60 space-y-1 list-disc pl-4">
-            <li>Dealer stands on all 17s</li>
-            <li>Blackjack pays 3:2</li>
-            <li>Insurance not available</li>
-            <li>Split pairs of same rank</li>
-          </ul>
+      {/* Info & History Overlay */}
+      <div className="fixed bottom-32 right-8 z-50 flex flex-col gap-4 items-end">
+        {/* History Panel */}
+        <div className="group/history relative">
+          <div className="absolute bottom-full right-0 mb-4 w-64 max-h-80 overflow-y-auto bg-[#151619]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/history:opacity-100 transition-opacity pointer-events-none p-4 custom-scrollbar">
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-3 text-[#00FF00] flex items-center gap-2">
+              <History className="w-3 h-3" /> Recent Hands
+            </h4>
+            <div className="space-y-2">
+              {gameState.history.length === 0 && <p className="text-[10px] text-white/20 italic text-center py-4">No games played yet</p>}
+              {gameState.history.map(round => (
+                <div key={round.id} className="flex justify-between items-center text-[10px] bg-white/5 p-2 rounded-lg border border-white/5">
+                  <div className="flex flex-col">
+                    <span className={cn(
+                      "font-bold uppercase",
+                      round.outcome === 'win' || round.outcome === 'blackjack' ? 'text-[#00FF00]' : round.outcome === 'push' ? 'text-white/60' : 'text-red-500'
+                    )}>
+                      {round.outcome}
+                    </span>
+                    <span className="text-white/40">{new Date(round.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div className="text-right flex flex-col items-end">
+                    <div className="font-mono">P:{round.playerScore} vs D:{round.dealerScore}</div>
+                    <div className="text-[#F27D26]">₹{round.payout}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all shadow-xl">
+            <History className="w-5 h-5 text-white/40" />
+          </button>
         </div>
-        <button className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
-          <Info className="w-5 h-5 text-white/40" />
-        </button>
+
+        <div className="group/info relative">
+          <div className="absolute bottom-full right-0 mb-4 w-64 p-4 bg-[#151619] border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none">
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-2 text-[#F27D26]">House Rules</h4>
+            <ul className="text-[10px] text-white/60 space-y-1 list-disc pl-4">
+              <li>Dealer stands on all 17s</li>
+              <li>Blackjack pays 3:2</li>
+              <li>Insurance not available</li>
+              <li>Split pairs of same rank</li>
+              <li>Double down on initial deal</li>
+            </ul>
+          </div>
+          <button className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all shadow-xl">
+            <Info className="w-5 h-5 text-white/40" />
+          </button>
+        </div>
       </div>
     </div>
   );
