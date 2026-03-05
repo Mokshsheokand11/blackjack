@@ -27,6 +27,7 @@ export default function App() {
     status: 'betting',
     message: 'Place your bet to start!',
     dealerCommentary: 'Welcome to Gemini Blackjack. High stakes, high rewards.',
+    consecutiveAllIns: 0,
   });
 
   const [betInput, setBetInput] = useState<number>(1000);
@@ -45,11 +46,40 @@ export default function App() {
     }
 
     setIsProcessing(true);
+    let newConsecutiveAllIns = gameState.consecutiveAllIns || 0;
+
+    if (betInput === gameState.balance) {
+      if (gameState.balance === INITIAL_BALANCE && newConsecutiveAllIns === 0) {
+        newConsecutiveAllIns = 1;
+      } else if (newConsecutiveAllIns > 0) {
+        newConsecutiveAllIns++;
+      }
+    } else {
+      newConsecutiveAllIns = 0;
+    }
+
     const newDeck = createDeck();
-    const pCard1 = newDeck.pop()!;
-    const dCard1 = newDeck.pop()!;
-    const pCard2 = newDeck.pop()!;
-    const dCard2 = newDeck.pop()!;
+    let pCard1 = newDeck.pop()!;
+    let dCard1 = newDeck.pop()!;
+    let pCard2 = newDeck.pop()!;
+    let dCard2 = newDeck.pop()!;
+
+    if (newConsecutiveAllIns > 0 && newConsecutiveAllIns <= 3) {
+      pCard1 = { suit: 'spades', rank: 'A', isFaceUp: true };
+      pCard2 = { suit: 'spades', rank: 'K', isFaceUp: true };
+      dCard1 = { suit: 'hearts', rank: '5', isFaceUp: true };
+      dCard2 = { suit: 'hearts', rank: '7', isFaceUp: true };
+    } else if (newConsecutiveAllIns > 3) {
+      pCard1 = { suit: 'clubs', rank: '10', isFaceUp: true };
+      pCard2 = { suit: 'clubs', rank: '6', isFaceUp: true };
+      dCard1 = { suit: 'hearts', rank: 'A', isFaceUp: true };
+      dCard2 = { suit: 'hearts', rank: 'K', isFaceUp: true };
+
+      newDeck.push({ suit: 'diamonds', rank: '10', isFaceUp: true });
+      newDeck.push({ suit: 'hearts', rank: '10', isFaceUp: true });
+      newDeck.push({ suit: 'spades', rank: '10', isFaceUp: true });
+      newDeck.push({ suit: 'clubs', rank: '10', isFaceUp: true });
+    }
 
     const playerHand: Hand = {
       cards: [pCard1, pCard2],
@@ -78,6 +108,7 @@ export default function App() {
       currentBet: betInput,
       status: playerHand.isBlackjack ? 'dealer-turn' : 'playing',
       message: playerHand.isBlackjack ? 'Blackjack!' : 'Your turn...',
+      consecutiveAllIns: newConsecutiveAllIns,
     });
 
     // Get initial commentary
@@ -288,6 +319,7 @@ export default function App() {
         balance: INITIAL_BALANCE,
         status: 'betting',
         message: 'Bankrupt! Here is another 50k Rs. Try again!',
+        consecutiveAllIns: 0,
       });
     } else {
       updateState({

@@ -27,4 +27,5 @@ export interface GameState {
   status: GameStatus;
   message: string;
   dealerCommentary: string;
+  consecutiveAllIns: number;
 }
