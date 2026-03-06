@@ -438,7 +438,7 @@ export default function App() {
       balance: finalBalance,
       status: 'settled',
       message: totalPayout > 0 ? `You won ${totalPayout} Rs!` : 'Better luck next time.',
-      history: [newHistoryEntry, ...gameState.history].slice(0, 10),
+      history: [newHistoryEntry, ...gameState.history].slice(0, 50),
       stats: newStats,
     });
 
@@ -750,7 +750,7 @@ export default function App() {
       <div className="fixed bottom-32 right-8 z-50 flex flex-col gap-4 items-end">
         {/* History Panel */}
         <div className="group/history relative">
-          <div className="absolute bottom-full right-0 mb-4 w-64 max-h-80 overflow-y-auto bg-[#151619]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/history:opacity-100 transition-opacity pointer-events-none p-4 custom-scrollbar">
+          <div className="absolute bottom-full right-0 mb-4 w-64 max-h-80 overflow-y-auto bg-[#151619]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/history:opacity-100 group-hover/history:pointer-events-auto transition-opacity pointer-events-none p-4 custom-scrollbar">
             <h4 className="text-xs font-bold uppercase tracking-widest mb-3 text-[#00FF00] flex items-center gap-2">
               <History className="w-3 h-3" /> Recent Hands
             </h4>
@@ -782,7 +782,7 @@ export default function App() {
 
         {/* Stats Panel */}
         <div className="group/stats relative">
-          <div className="absolute bottom-full right-0 mb-4 w-64 bg-[#151619]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/stats:opacity-100 transition-opacity pointer-events-none p-4">
+          <div className="absolute bottom-full right-0 mb-4 w-64 bg-[#151619]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/stats:opacity-100 group-hover/stats:pointer-events-auto transition-opacity pointer-events-none p-4">
             <h4 className="text-xs font-bold uppercase tracking-widest mb-3 text-[#00FF00] flex items-center gap-2">
               <BarChart2 className="w-3 h-3" /> Performance Stats
             </h4>
