@@ -574,14 +574,27 @@ export default function App() {
 
             <div className="flex flex-col items-center gap-2">
               <p className="text-xs text-white/40 uppercase tracking-[0.3em]">Total Bet Amount</p>
-              <motion.p
-                key={betInput}
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
-                className="text-6xl font-mono font-bold text-[#00FF00]"
-              >
-                ₹{betInput.toLocaleString()}
-              </motion.p>
+              <div className="relative group">
+                <span className="absolute left-[-1.5rem] top-1/2 -translate-y-1/2 text-4xl font-mono font-bold text-[#00FF00]/40">₹</span>
+                <input
+                  type="number"
+                  value={betInput || ''}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    if (val <= gameState.balance) {
+                      setBetChips(val > 0 ? [val] : []);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (betInput < MIN_BET && betInput > 0) {
+                      setBetChips([MIN_BET]);
+                    }
+                  }}
+                  className="bg-transparent text-6xl font-mono font-bold text-[#00FF00] border-none outline-none text-center w-full max-w-[300px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-0"
+                  placeholder="0"
+                />
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-[#00FF00]/20 to-transparent scale-x-0 group-focus-within:scale-x-100 transition-transform duration-500" />
+              </div>
             </div>
 
             <div className="flex flex-wrap justify-center items-center gap-4">
