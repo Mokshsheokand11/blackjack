@@ -27,6 +27,15 @@ export interface RoundResult {
   timestamp: number;
 }
 
+export interface Stats {
+  wins: number;
+  losses: number;
+  pushes: number;
+  blackjacks: number;
+  totalHands: number;
+  biggestWin: number;
+}
+
 export interface GameState {
   deck: Card[];
   playerHands: Hand[];
@@ -39,4 +48,5 @@ export interface GameState {
   dealerCommentary: string;
   consecutiveAllIns: number;
   history: RoundResult[];
+  stats: Stats;
 }

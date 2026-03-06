@@ -4,7 +4,8 @@ import { Card as CardComponent } from './components/Card';
 import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History } from 'lucide-react';
+import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2 } from 'lucide-react';
+import { StatsPanel } from './components/StatsPanel';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,6 +30,14 @@ export default function App() {
     dealerCommentary: 'Welcome to Blackjack. High stakes, high rewards. Go Risky or Go Home',
     consecutiveAllIns: 0,
     history: [],
+    stats: {
+      wins: 0,
+      losses: 0,
+      pushes: 0,
+      blackjacks: 0,
+      totalHands: 0,
+      biggestWin: 0,
+    },
   });
 
   // Persist balance and history
@@ -36,12 +45,14 @@ export default function App() {
     const savedBalance = localStorage.getItem('blackjack_balance');
     const savedStreak = localStorage.getItem('blackjack_streak');
     const savedHistory = localStorage.getItem('blackjack_history');
+    const savedStats = localStorage.getItem('blackjack_stats');
 
     setGameState(prev => ({
       ...prev,
       balance: savedBalance ? parseInt(savedBalance) : prev.balance,
       consecutiveAllIns: savedStreak ? parseInt(savedStreak) : prev.consecutiveAllIns,
-      history: savedHistory ? JSON.parse(savedHistory) : prev.history
+      history: savedHistory ? JSON.parse(savedHistory) : prev.history,
+      stats: savedStats ? JSON.parse(savedStats) : prev.stats
     }));
   }, []);
 
@@ -49,7 +60,8 @@ export default function App() {
     localStorage.setItem('blackjack_balance', gameState.balance.toString());
     localStorage.setItem('blackjack_streak', gameState.consecutiveAllIns.toString());
     localStorage.setItem('blackjack_history', JSON.stringify(gameState.history));
-  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history]);
+    localStorage.setItem('blackjack_stats', JSON.stringify(gameState.stats));
+  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats]);
 
   const [betChips, setBetChips] = useState<number[]>([]);
   const betInput = betChips.reduce((sum, chip) => sum + chip, 0);
@@ -388,9 +400,28 @@ export default function App() {
 
     const finalBalance = gameState.balance + totalPayout;
 
-    // Add to history
+    // Add to history and update stats
     const mainHand = newPlayerHands[0];
     const outcome = mainHand.isBlackjack ? 'blackjack' : (totalPayout > gameState.currentBet ? 'win' : (totalPayout === gameState.currentBet ? 'push' : 'loss'));
+
+    const newStats = { ...gameState.stats };
+    newStats.totalHands += 1;
+
+    if (outcome === 'blackjack') {
+      newStats.wins += 1;
+      newStats.blackjacks += 1;
+    } else if (outcome === 'win') {
+      newStats.wins += 1;
+    } else if (outcome === 'loss') {
+      newStats.losses += 1;
+    } else if (outcome === 'push') {
+      newStats.pushes += 1;
+    }
+
+    const currentWinProfit = totalPayout - gameState.currentBet;
+    if (currentWinProfit > newStats.biggestWin) {
+      newStats.biggestWin = currentWinProfit;
+    }
 
     const newHistoryEntry: RoundResult = {
       id: Math.random().toString(36).substr(2, 9),
@@ -408,6 +439,7 @@ export default function App() {
       status: 'settled',
       message: totalPayout > 0 ? `You won ${totalPayout} Rs!` : 'Better luck next time.',
       history: [newHistoryEntry, ...gameState.history].slice(0, 10),
+      stats: newStats,
     });
 
     const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet);
@@ -745,6 +777,19 @@ export default function App() {
           </div>
           <button className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all shadow-xl">
             <History className="w-5 h-5 text-white/40" />
+          </button>
+        </div>
+
+        {/* Stats Panel */}
+        <div className="group/stats relative">
+          <div className="absolute bottom-full right-0 mb-4 w-64 bg-[#151619]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/stats:opacity-100 transition-opacity pointer-events-none p-4">
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-3 text-[#00FF00] flex items-center gap-2">
+              <BarChart2 className="w-3 h-3" /> Performance Stats
+            </h4>
+            <StatsPanel stats={gameState.stats} />
+          </div>
+          <button className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all shadow-xl">
+            <BarChart2 className="w-5 h-5 text-white/40" />
           </button>
         </div>
 
