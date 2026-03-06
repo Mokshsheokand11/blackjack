@@ -4,8 +4,9 @@ import { Card as CardComponent } from './components/Card';
 import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2 } from 'lucide-react';
+import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Volume2, VolumeX } from 'lucide-react';
 import { StatsPanel } from './components/StatsPanel';
+import { playSound, soundManager } from './utils/sound';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -63,6 +64,13 @@ export default function App() {
     localStorage.setItem('blackjack_stats', JSON.stringify(gameState.stats));
   }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats]);
 
+  const [isMuted, setIsMuted] = useState(soundManager.getMuted());
+
+  const toggleMute = () => {
+    const newMuted = soundManager.toggleMuted();
+    setIsMuted(newMuted);
+  };
+
   const [betChips, setBetChips] = useState<number[]>([]);
   const betInput = betChips.reduce((sum, chip) => sum + chip, 0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -70,6 +78,7 @@ export default function App() {
   const handleAddChip = (amount: number) => {
     if (betInput + amount <= gameState.balance) {
       setBetChips(prev => [...prev, amount]);
+      playSound('chip');
     }
   };
 
@@ -159,6 +168,8 @@ export default function App() {
       consecutiveAllIns: newConsecutiveAllIns,
     });
 
+    playSound('deal');
+
     // Get initial commentary
     const commentary = await getDealerCommentary(playerHand, dealerHand, 'deal', newBalance, betInput);
     updateState({ dealerCommentary: commentary });
@@ -196,6 +207,8 @@ export default function App() {
       status: allHandsDone ? 'dealer-turn' : 'playing',
       message: busted ? 'Busted!' : 'Hit again or stand?',
     });
+
+    playSound(busted ? 'loss' : 'deal');
 
     const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'hit', gameState.balance, gameState.currentBet);
     updateState({ dealerCommentary: commentary });
@@ -349,6 +362,7 @@ export default function App() {
             deck: currentDeck,
             dealerHand: currentDealerHand,
           }));
+          playSound('deal');
         }
 
         // Settle the game
@@ -389,7 +403,14 @@ export default function App() {
       return { ...hand, resultMessage };
     });
 
+    const finalBalance = gameState.balance + totalPayout;
+
+    // Add to history and update stats
+    const mainHand = newPlayerHands[0];
+    const outcome = mainHand.isBlackjack ? 'blackjack' : (totalPayout > gameState.currentBet ? 'win' : (totalPayout === gameState.currentBet ? 'push' : 'loss'));
+
     if (winCount > 0) {
+      playSound(mainHand.isBlackjack ? 'blackjack' : 'win');
       confetti({
         particleCount: 150,
         spread: 70,
@@ -398,11 +419,9 @@ export default function App() {
       });
     }
 
-    const finalBalance = gameState.balance + totalPayout;
-
-    // Add to history and update stats
-    const mainHand = newPlayerHands[0];
-    const outcome = mainHand.isBlackjack ? 'blackjack' : (totalPayout > gameState.currentBet ? 'win' : (totalPayout === gameState.currentBet ? 'push' : 'loss'));
+    if (winCount === 0 && outcome === 'loss') {
+      playSound('loss');
+    }
 
     const newStats = { ...gameState.stats };
     newStats.totalHands += 1;
@@ -481,6 +500,18 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-6">
+          <button
+            onClick={toggleMute}
+            className="p-3 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all group"
+            title={isMuted ? "Unmute" : "Mute"}
+          >
+            {isMuted ? (
+              <VolumeX className="w-5 h-5 text-red-500" />
+            ) : (
+              <Volume2 className="w-5 h-5 text-[#00FF00] group-hover:scale-110 transition-transform" />
+            )}
+          </button>
+
           <div className="text-right">
             <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Your Balance</p>
             <p className="text-2xl font-mono font-bold text-[#00FF00]">₹{gameState.balance.toLocaleString()}</p>
