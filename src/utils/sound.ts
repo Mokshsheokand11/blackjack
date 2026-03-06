@@ -48,8 +48,25 @@ class SoundManager {
     }
 
     playChip() {
-        this.playTone(800, 'sine', 0, 0.1, 0.05);
-        this.playTone(1200, 'sine', 0.02, 0.05, 0.03);
+        // A layered sound for a more realistic "clack"
+        this.playTone(800, 'sine', 0, 0.05, 0.05);
+        this.playTone(1500, 'sine', 0.01, 0.03, 0.03);
+
+        // Add a little snap/noise
+        this.init();
+        if (this.isMuted || !this.ctx || !this.masterGain) return;
+        const bufferSize = this.ctx.sampleRate * 0.02;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.02, this.ctx.currentTime);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.02);
+        noise.connect(noiseGain);
+        noiseGain.connect(this.masterGain);
+        noise.start();
     }
 
     playDeal() {

@@ -84,10 +84,12 @@ export default function App() {
 
   const handleUndoChip = () => {
     setBetChips(prev => prev.slice(0, -1));
+    playSound('chip');
   };
 
   const handleAllIn = () => {
     setBetChips([gameState.balance]);
+    playSound('chip');
   };
 
   // Helper to update game state
@@ -614,6 +616,7 @@ export default function App() {
                     const val = parseInt(e.target.value) || 0;
                     if (val <= gameState.balance) {
                       setBetChips(val > 0 ? [val] : []);
+                      if (val > 0) playSound('chip');
                     }
                   }}
                   onBlur={() => {
