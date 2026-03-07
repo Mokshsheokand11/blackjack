@@ -44,6 +44,14 @@ export interface LeaderboardEntry {
   timestamp: number;
 }
 
+export interface LoanInfo {
+  amount: number;
+  interestRate: number;
+  roundsRemaining: number;
+  totalRepayment: number;
+  isThreatened: boolean;
+}
+
 export interface GameState {
   deck: Card[];
   playerHands: Hand[];
@@ -58,4 +66,7 @@ export interface GameState {
   history: RoundResult[];
   stats: Stats;
   leaderboard: LeaderboardEntry[];
+  loan: LoanInfo | null;
+  bankruptCount: number;
+  isDead: boolean;
 }

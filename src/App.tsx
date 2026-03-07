@@ -4,10 +4,11 @@ import { Card as CardComponent } from './components/Card';
 import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User } from 'lucide-react';
+import { Landmark, Skull, Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User } from 'lucide-react';
 import { StatsPanel } from './components/StatsPanel';
 import { Leaderboard } from './components/Leaderboard';
 import { NameModal } from './components/NameModal';
+import { LoanModal } from './components/LoanModal';
 import { playSound, soundManager } from './utils/sound';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
@@ -42,11 +43,15 @@ export default function App() {
       biggestWin: 0,
     },
     leaderboard: [],
+    loan: null,
+    bankruptCount: 0,
+    isDead: false,
   });
 
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [playerName, setPlayerName] = useState('Local Legend');
   const [showNameModal, setShowNameModal] = useState(false);
+  const [showLoanModal, setShowLoanModal] = useState(false);
 
   // Persist balance and history
   useEffect(() => {
@@ -63,7 +68,10 @@ export default function App() {
       consecutiveAllIns: savedStreak ? parseInt(savedStreak) : prev.consecutiveAllIns,
       history: savedHistory ? JSON.parse(savedHistory) : prev.history,
       stats: savedStats ? JSON.parse(savedStats) : prev.stats,
-      leaderboard: savedLeaderboard ? JSON.parse(savedLeaderboard) : prev.leaderboard
+      leaderboard: savedLeaderboard ? JSON.parse(savedLeaderboard) : prev.leaderboard,
+      bankruptCount: localStorage.getItem('blackjack_bankrupt_count') ? parseInt(localStorage.getItem('blackjack_bankrupt_count')!) : prev.bankruptCount,
+      isDead: localStorage.getItem('blackjack_is_dead') === 'true',
+      loan: localStorage.getItem('blackjack_loan') ? JSON.parse(localStorage.getItem('blackjack_loan')!) : prev.loan
     }));
 
     if (savedPlayerName) {
@@ -77,7 +85,10 @@ export default function App() {
     localStorage.setItem('blackjack_history', JSON.stringify(gameState.history));
     localStorage.setItem('blackjack_stats', JSON.stringify(gameState.stats));
     localStorage.setItem('blackjack_leaderboard', JSON.stringify(gameState.leaderboard));
-  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.leaderboard]);
+    localStorage.setItem('blackjack_bankrupt_count', gameState.bankruptCount.toString());
+    localStorage.setItem('blackjack_is_dead', gameState.isDead.toString());
+    localStorage.setItem('blackjack_loan', JSON.stringify(gameState.loan));
+  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.leaderboard, gameState.bankruptCount, gameState.isDead, gameState.loan]);
 
   useEffect(() => {
     localStorage.setItem('blackjack_player_name', playerName);
@@ -185,7 +196,7 @@ export default function App() {
     playSound('deal');
 
     // Get initial commentary
-    const commentary = await getDealerCommentary(playerHand, dealerHand, 'deal', newBalance, betInput, newConsecutiveAllIns);
+    const commentary = await getDealerCommentary(playerHand, dealerHand, 'deal', newBalance, betInput, newConsecutiveAllIns, gameState.loan);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -224,7 +235,7 @@ export default function App() {
 
     playSound(busted ? 'loss' : 'deal');
 
-    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'hit', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns);
+    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'hit', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -247,7 +258,7 @@ export default function App() {
       message: hasMoreHands ? `Hand ${nextHandIndex + 1}'s turn` : 'Dealer\'s turn...',
     });
 
-    const commentary = await getDealerCommentary(newPlayerHands[gameState.activeHandIndex], gameState.dealerHand, 'stand', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns);
+    const commentary = await getDealerCommentary(newPlayerHands[gameState.activeHandIndex], gameState.dealerHand, 'stand', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -297,7 +308,7 @@ export default function App() {
       message: busted ? 'Busted!' : (hasMoreHands ? `Hand ${nextHandIndex + 1}'s turn` : 'Dealer\'s turn...'),
     });
 
-    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'double', newBalance, totalBet, gameState.consecutiveAllIns);
+    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'double', newBalance, totalBet, gameState.consecutiveAllIns, gameState.loan);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -344,7 +355,7 @@ export default function App() {
       message: 'Hands split! Playing first hand...',
     });
 
-    const commentary = await getDealerCommentary(hand1, gameState.dealerHand, 'split', gameState.balance - gameState.currentBet, gameState.currentBet, gameState.consecutiveAllIns);
+    const commentary = await getDealerCommentary(hand1, gameState.dealerHand, 'split', gameState.balance - gameState.currentBet, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -417,7 +428,7 @@ export default function App() {
       return { ...hand, resultMessage };
     });
 
-    const finalBalance = gameState.balance + totalPayout;
+    let finalBalance = gameState.balance + totalPayout;
 
     // Add to history and update stats
     const mainHand = newPlayerHands[0];
@@ -482,30 +493,72 @@ export default function App() {
       if (newLeaderboard.length > 10) newLeaderboard.pop();
     }
 
+    let finalLoan = gameState.loan ? { ...gameState.loan } : null;
+    if (finalLoan && finalLoan.roundsRemaining > 0) {
+      finalLoan.roundsRemaining -= 1;
+      if (finalLoan.roundsRemaining === 0) {
+        finalLoan.isThreatened = true;
+      }
+    }
+
+    // Auto-repay if balance sufficient at the end of the period
+    if (finalLoan && finalLoan.roundsRemaining === 0 && finalBalance >= finalLoan.totalRepayment) {
+      finalBalance -= finalLoan.totalRepayment;
+      finalLoan = null;
+    }
+
     updateState({
       playerHands: newPlayerHands,
       balance: finalBalance,
       status: 'settled',
-      message: totalPayout > 0 ? `You won ${totalPayout} Rs!` : 'Better luck next time.',
+      message: totalPayout > 0 ? `You won ${totalPayout} Rs! ${finalLoan === null && gameState.loan !== null ? 'Loan repaid!' : ''}` : 'Better luck next time.',
       history: [newHistoryEntry, ...gameState.history].slice(0, 50),
       stats: newStats,
       leaderboard: newLeaderboard,
+      loan: finalLoan,
     });
 
-    const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet, gameState.consecutiveAllIns);
+    const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
+  };
+
+  const handleTakeLoan = (amount: number) => {
+    const interestRate = gameState.bankruptCount === 0 ? 0.1 : 0.5;
+    const totalRepayment = Math.round(amount * (1 + interestRate));
+
+    setGameState(prev => ({
+      ...prev,
+      balance: prev.balance + amount,
+      loan: {
+        amount,
+        interestRate,
+        roundsRemaining: 3,
+        totalRepayment,
+        isThreatened: interestRate > 0.1
+      },
+      message: `Loan of ₹${amount.toLocaleString()} accepted. You have 3 games to pay back ₹${totalRepayment.toLocaleString()}.`,
+    }));
+    setShowLoanModal(false);
+    playSound('win');
   };
 
   const resetGame = () => {
     setBetChips([]);
     if (gameState.balance < MIN_BET) {
-      updateState({
-        balance: INITIAL_BALANCE,
-        status: 'betting',
-        message: 'Bankrupt! Here is another 50k Rs. Try again!',
-        consecutiveAllIns: 0,
-      });
+      const newBankruptCount = gameState.bankruptCount + 1;
+      if (newBankruptCount > 2) {
+        setGameState(prev => ({ ...prev, isDead: true }));
+        playSound('loss');
+        return;
+      }
+
+      setGameState(prev => ({
+        ...prev,
+        bankruptCount: newBankruptCount,
+        message: 'Balance ZERO. You need a loan to continue.',
+      }));
+      setShowLoanModal(true);
     } else {
       updateState({
         status: 'betting',
@@ -699,14 +752,24 @@ export default function App() {
               </button>
             </div>
 
-            <button
-              onClick={startRound}
-              disabled={isProcessing || betInput < MIN_BET || betInput > gameState.balance}
-              className="w-full max-w-sm py-5 bg-[#F27D26] text-black font-extrabold uppercase tracking-[0.3em] rounded-2xl flex items-center justify-center gap-4 hover:bg-[#ff8c3a] disabled:opacity-20 shadow-[0_15px_40px_rgba(242,125,38,0.4)] transition-all active:scale-[0.98] mt-4"
-            >
-              <Play className="w-6 h-6 fill-current" />
-              Deal Cards
-            </button>
+            {gameState.balance === 0 ? (
+              <button
+                onClick={() => setShowLoanModal(true)}
+                className="w-full max-w-sm py-5 bg-red-600 text-white font-extrabold uppercase tracking-[0.3em] rounded-2xl flex items-center justify-center gap-4 hover:bg-red-500 shadow-[0_15px_40px_rgba(220,38,38,0.4)] transition-all active:scale-[0.98] mt-4"
+              >
+                <Landmark className="w-6 h-6" />
+                Request Loan
+              </button>
+            ) : (
+              <button
+                onClick={startRound}
+                disabled={isProcessing || betInput < MIN_BET || betInput > gameState.balance}
+                className="w-full max-w-sm py-5 bg-[#F27D26] text-black font-extrabold uppercase tracking-[0.3em] rounded-2xl flex items-center justify-center gap-4 hover:bg-[#ff8c3a] disabled:opacity-20 shadow-[0_15px_40px_rgba(242,125,38,0.4)] transition-all active:scale-[0.98] mt-4"
+              >
+                <Play className="w-6 h-6 fill-current" />
+                Deal Cards
+              </button>
+            )}
           </section>
         )}
 
@@ -900,6 +963,59 @@ export default function App() {
         onSave={setPlayerName}
         onClose={() => setShowNameModal(false)}
       />
+      <LoanModal
+        isOpen={showLoanModal}
+        bankruptCount={gameState.bankruptCount}
+        onTakeLoan={handleTakeLoan}
+      />
+
+      {/* Dead Screen Overlay */}
+      <AnimatePresence>
+        {gameState.isDead && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-8 gap-12"
+          >
+            <motion.div
+              initial={{ scale: 0.5, rotate: -20, opacity: 0 }}
+              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+              transition={{
+                type: "spring",
+                stiffness: 100,
+                damping: 10,
+                duration: 2
+              }}
+              className="flex flex-col items-center gap-6"
+            >
+              <Skull className="w-32 h-32 text-red-700 animate-pulse" />
+              <h1 className="text-[10vw] font-black text-red-600 tracking-tighter shadow-red-900/50 drop-shadow-[0_0_30px_rgba(220,38,38,0.8)]">
+                YOU ARE DEAD
+              </h1>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1 }}
+              className="text-center space-y-4"
+            >
+              <p className="text-red-900/80 font-mono text-sm uppercase tracking-[0.5em] animate-pulse">
+                Debt Collected. Life Terminated.
+              </p>
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.reload();
+                }}
+                className="px-8 py-3 bg-red-950 border border-red-900 text-red-600 rounded-full text-[10px] uppercase tracking-widest hover:bg-red-900 hover:text-red-400 transition-all font-bold mt-8"
+              >
+                Accept Eternal Rest (Reset Everything)
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
