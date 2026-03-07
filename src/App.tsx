@@ -971,6 +971,11 @@ export default function App() {
         isOpen={showLoanModal}
         bankruptCount={gameState.bankruptCount}
         onTakeLoan={handleTakeLoan}
+        onRefuse={() => {
+          setShowLoanModal(false);
+          updateState({ message: "Refused? Fine. No money, no cards. The choice is yours." });
+          playSound('chip');
+        }}
       />
 
       {/* Dead Screen Overlay */}

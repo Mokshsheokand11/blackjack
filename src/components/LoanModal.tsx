@@ -6,9 +6,10 @@ interface LoanModalProps {
     isOpen: boolean;
     bankruptCount: number;
     onTakeLoan: (amount: number) => void;
+    onRefuse: () => void;
 }
 
-export const LoanModal: React.FC<LoanModalProps> = ({ isOpen, bankruptCount, onTakeLoan }) => {
+export const LoanModal: React.FC<LoanModalProps> = ({ isOpen, bankruptCount, onTakeLoan, onRefuse }) => {
     const [amount, setAmount] = useState<number>(0);
     const maxLoan = 100000;
     const interestRate = bankruptCount === 0 ? 0.1 : 0.5;
@@ -98,17 +99,26 @@ export const LoanModal: React.FC<LoanModalProps> = ({ isOpen, bankruptCount, onT
                                     <p className="text-2xl font-mono font-black text-white">₹{totalToPay.toLocaleString()}</p>
                                 </div>
 
-                                <button
-                                    type="submit"
-                                    disabled={amount === 0}
-                                    className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-20 ${bankruptCount === 0
+                                <div className="flex gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={onRefuse}
+                                        className="flex-1 py-5 rounded-2xl font-black uppercase tracking-[0.2em] bg-white/5 border border-white/10 text-white/40 hover:bg-white/10 hover:text-white transition-all active:scale-[0.98]"
+                                    >
+                                        Refuse
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={amount === 0}
+                                        className={`flex-[2] py-5 rounded-2xl font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-20 ${bankruptCount === 0
                                             ? 'bg-[#F27D26] text-black hover:bg-[#ff8c3a] shadow-[0_15px_30px_rgba(242,125,38,0.3)]'
                                             : 'bg-red-600 text-white hover:bg-red-500 shadow-[0_15px_30px_rgba(220,38,38,0.4)]'
-                                        }`}
-                                >
-                                    <Check className="w-6 h-6" />
-                                    Accept Contract
-                                </button>
+                                            }`}
+                                    >
+                                        <Check className="w-6 h-6" />
+                                        Accept
+                                    </button>
+                                </div>
                             </form>
                         </div>
                     </motion.div>
