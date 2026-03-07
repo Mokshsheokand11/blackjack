@@ -4,9 +4,10 @@ import { Card as CardComponent } from './components/Card';
 import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy } from 'lucide-react';
+import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User } from 'lucide-react';
 import { StatsPanel } from './components/StatsPanel';
 import { Leaderboard } from './components/Leaderboard';
+import { NameModal } from './components/NameModal';
 import { playSound, soundManager } from './utils/sound';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
@@ -43,6 +44,10 @@ export default function App() {
     leaderboard: [],
   });
 
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [playerName, setPlayerName] = useState('Local Legend');
+  const [showNameModal, setShowNameModal] = useState(false);
+
   // Persist balance and history
   useEffect(() => {
     const savedBalance = localStorage.getItem('blackjack_balance');
@@ -50,6 +55,7 @@ export default function App() {
     const savedHistory = localStorage.getItem('blackjack_history');
     const savedStats = localStorage.getItem('blackjack_stats');
     const savedLeaderboard = localStorage.getItem('blackjack_leaderboard');
+    const savedPlayerName = localStorage.getItem('blackjack_player_name');
 
     setGameState(prev => ({
       ...prev,
@@ -59,6 +65,10 @@ export default function App() {
       stats: savedStats ? JSON.parse(savedStats) : prev.stats,
       leaderboard: savedLeaderboard ? JSON.parse(savedLeaderboard) : prev.leaderboard
     }));
+
+    if (savedPlayerName) {
+      setPlayerName(savedPlayerName);
+    }
   }, []);
 
   useEffect(() => {
@@ -69,7 +79,10 @@ export default function App() {
     localStorage.setItem('blackjack_leaderboard', JSON.stringify(gameState.leaderboard));
   }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.leaderboard]);
 
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  useEffect(() => {
+    localStorage.setItem('blackjack_player_name', playerName);
+  }, [playerName]);
+
   const [betChips, setBetChips] = useState<number[]>([]);
   const betInput = betChips.reduce((sum, chip) => sum + chip, 0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -460,7 +473,7 @@ export default function App() {
     if (newLeaderboard.length < 10 || qualifyPoints > newLeaderboard[newLeaderboard.length - 1].balance) {
       newLeaderboard.push({
         id: Math.random().toString(36).substr(2, 9),
-        name: 'Local Legend',
+        name: playerName,
         balance: qualifyPoints,
         timestamp: Date.now()
       });
@@ -513,6 +526,13 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight uppercase">BlackJack</h1>
+            <button
+              onClick={() => setShowNameModal(true)}
+              className="flex items-center gap-1.5 text-[10px] text-white/40 uppercase tracking-widest hover:text-[#F27D26] transition-colors group"
+            >
+              <User className="w-3 h-3" />
+              <span>{playerName}</span>
+            </button>
           </div>
         </div>
 
@@ -882,6 +902,13 @@ export default function App() {
         entries={gameState.leaderboard}
         isOpen={showLeaderboard}
         onClose={() => setShowLeaderboard(false)}
+      />
+
+      <NameModal
+        currentName={playerName}
+        isOpen={showNameModal}
+        onSave={setPlayerName}
+        onClose={() => setShowNameModal(false)}
       />
     </div>
   );
