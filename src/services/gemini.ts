@@ -6,7 +6,8 @@ export async function getDealerCommentary(
   dealerHand: Hand,
   action: string,
   balance: number,
-  bet: number
+  bet: number,
+  allInStreak: number = 0
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY || "";
   if (!apiKey) {
@@ -19,6 +20,15 @@ export async function getDealerCommentary(
     const playerHandStr = playerHand.cards.map(c => `${c.rank} of ${c.suit}`).join(", ");
     const dealerHandStr = dealerHand.cards.map(c => `${c.rank} of ${c.suit}`).join(", ");
 
+    let streakContext = "";
+    if (allInStreak === 1) {
+      streakContext = "The player just went all-in. Be impressed but cautious.";
+    } else if (allInStreak > 1 && allInStreak <= 3) {
+      streakContext = `The player is on a ${allInStreak}x all-in streak and winning. Be suspiciously encouraging, hinting that their luck is 'too good'.`;
+    } else if (allInStreak > 3) {
+      streakContext = `The player has gone all-in ${allInStreak} times. Now, the House is taking revenge. Be witty, slightly mocking, and remind them that greed has a price. Their luck has run out.`;
+    }
+
     const prompt = `
       You are a sophisticated, slightly witty, and professional casino dealer named "Gemini".
       The current game is Blackjack.
@@ -28,6 +38,9 @@ export async function getDealerCommentary(
       Player's action: ${action}
       Player's balance: ${balance} Rs
       Current bet: ${bet} Rs
+      All-in streak: ${allInStreak}
+      
+      Context: ${streakContext}
       
       Provide a short, engaging commentary (max 15 words) as the dealer. 
       Be encouraging but maintain that "house always wins" edge.

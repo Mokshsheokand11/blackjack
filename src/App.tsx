@@ -166,7 +166,7 @@ export default function App() {
     playSound('deal');
 
     // Get initial commentary
-    const commentary = await getDealerCommentary(playerHand, dealerHand, 'deal', newBalance, betInput);
+    const commentary = await getDealerCommentary(playerHand, dealerHand, 'deal', newBalance, betInput, newConsecutiveAllIns);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -205,7 +205,7 @@ export default function App() {
 
     playSound(busted ? 'loss' : 'deal');
 
-    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'hit', gameState.balance, gameState.currentBet);
+    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'hit', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -228,7 +228,7 @@ export default function App() {
       message: hasMoreHands ? `Hand ${nextHandIndex + 1}'s turn` : 'Dealer\'s turn...',
     });
 
-    const commentary = await getDealerCommentary(newPlayerHands[gameState.activeHandIndex], gameState.dealerHand, 'stand', gameState.balance, gameState.currentBet);
+    const commentary = await getDealerCommentary(newPlayerHands[gameState.activeHandIndex], gameState.dealerHand, 'stand', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -278,7 +278,7 @@ export default function App() {
       message: busted ? 'Busted!' : (hasMoreHands ? `Hand ${nextHandIndex + 1}'s turn` : 'Dealer\'s turn...'),
     });
 
-    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'double', newBalance, totalBet);
+    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'double', newBalance, totalBet, gameState.consecutiveAllIns);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -325,7 +325,7 @@ export default function App() {
       message: 'Hands split! Playing first hand...',
     });
 
-    const commentary = await getDealerCommentary(hand1, gameState.dealerHand, 'split', gameState.balance - gameState.currentBet, gameState.currentBet);
+    const commentary = await getDealerCommentary(hand1, gameState.dealerHand, 'split', gameState.balance - gameState.currentBet, gameState.currentBet, gameState.consecutiveAllIns);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -456,7 +456,7 @@ export default function App() {
       stats: newStats,
     });
 
-    const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet);
+    const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet, gameState.consecutiveAllIns);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
