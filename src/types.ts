@@ -36,6 +36,13 @@ export interface Stats {
   biggestWin: number;
 }
 
+export interface LeaderboardEntry {
+  id: string;
+  name: string;
+  balance: number;
+  timestamp: number;
+}
+
 export interface GameState {
   deck: Card[];
   playerHands: Hand[];
@@ -49,4 +56,5 @@ export interface GameState {
   consecutiveAllIns: number;
   history: RoundResult[];
   stats: Stats;
+  leaderboard: LeaderboardEntry[];
 }

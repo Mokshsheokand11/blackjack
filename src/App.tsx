@@ -4,8 +4,9 @@ import { Card as CardComponent } from './components/Card';
 import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2 } from 'lucide-react';
+import { Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy } from 'lucide-react';
 import { StatsPanel } from './components/StatsPanel';
+import { Leaderboard } from './components/Leaderboard';
 import { playSound, soundManager } from './utils/sound';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
@@ -39,6 +40,7 @@ export default function App() {
       totalHands: 0,
       biggestWin: 0,
     },
+    leaderboard: [],
   });
 
   // Persist balance and history
@@ -47,13 +49,15 @@ export default function App() {
     const savedStreak = localStorage.getItem('blackjack_streak');
     const savedHistory = localStorage.getItem('blackjack_history');
     const savedStats = localStorage.getItem('blackjack_stats');
+    const savedLeaderboard = localStorage.getItem('blackjack_leaderboard');
 
     setGameState(prev => ({
       ...prev,
       balance: savedBalance ? parseInt(savedBalance) : prev.balance,
       consecutiveAllIns: savedStreak ? parseInt(savedStreak) : prev.consecutiveAllIns,
       history: savedHistory ? JSON.parse(savedHistory) : prev.history,
-      stats: savedStats ? JSON.parse(savedStats) : prev.stats
+      stats: savedStats ? JSON.parse(savedStats) : prev.stats,
+      leaderboard: savedLeaderboard ? JSON.parse(savedLeaderboard) : prev.leaderboard
     }));
   }, []);
 
@@ -62,8 +66,10 @@ export default function App() {
     localStorage.setItem('blackjack_streak', gameState.consecutiveAllIns.toString());
     localStorage.setItem('blackjack_history', JSON.stringify(gameState.history));
     localStorage.setItem('blackjack_stats', JSON.stringify(gameState.stats));
-  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats]);
+    localStorage.setItem('blackjack_leaderboard', JSON.stringify(gameState.leaderboard));
+  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.leaderboard]);
 
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [betChips, setBetChips] = useState<number[]>([]);
   const betInput = betChips.reduce((sum, chip) => sum + chip, 0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -447,6 +453,21 @@ export default function App() {
       timestamp: Date.now()
     };
 
+    const newLeaderboard = [...gameState.leaderboard];
+    const qualifyPoints = finalBalance;
+
+    // Check if qualifies for leaderboard (top 10)
+    if (newLeaderboard.length < 10 || qualifyPoints > newLeaderboard[newLeaderboard.length - 1].balance) {
+      newLeaderboard.push({
+        id: Math.random().toString(36).substr(2, 9),
+        name: 'Local Legend',
+        balance: qualifyPoints,
+        timestamp: Date.now()
+      });
+      newLeaderboard.sort((a, b) => b.balance - a.balance);
+      if (newLeaderboard.length > 10) newLeaderboard.pop();
+    }
+
     updateState({
       playerHands: newPlayerHands,
       balance: finalBalance,
@@ -454,6 +475,7 @@ export default function App() {
       message: totalPayout > 0 ? `You won ${totalPayout} Rs!` : 'Better luck next time.',
       history: [newHistoryEntry, ...gameState.history].slice(0, 50),
       stats: newStats,
+      leaderboard: newLeaderboard,
     });
 
     const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet, gameState.consecutiveAllIns);
@@ -499,6 +521,13 @@ export default function App() {
             <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Your Balance</p>
             <p className="text-2xl font-mono font-bold text-[#00FF00]">₹{gameState.balance.toLocaleString()}</p>
           </div>
+          <button
+            onClick={() => setShowLeaderboard(true)}
+            className="w-10 h-10 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-all active:scale-95 group"
+            title="Hall of Fame"
+          >
+            <Trophy className="text-white/60 group-hover:text-[#F27D26] w-5 h-5 transition-colors" />
+          </button>
         </div>
       </header>
 
@@ -814,12 +843,23 @@ export default function App() {
             <h4 className="text-xs font-bold uppercase tracking-widest mb-3 text-[#00FF00] flex items-center gap-2">
               <BarChart2 className="w-3 h-3" /> Performance Stats
             </h4>
-            <StatsPanel stats={gameState.stats} />
+            <StatsPanel
+              stats={gameState.stats}
+              history={gameState.history}
+            />
           </div>
           <button className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all shadow-xl">
             <BarChart2 className="w-5 h-5 text-white/40" />
           </button>
         </div>
+
+        <button
+          onClick={() => setShowLeaderboard(true)}
+          className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all shadow-xl group"
+          title="Hall of Fame"
+        >
+          <Trophy className="w-5 h-5 text-white/40 group-hover:text-[#F27D26] transition-colors" />
+        </button>
 
         <div className="group/info relative">
           <div className="absolute bottom-full right-0 mb-4 w-64 p-4 bg-[#151619] border border-white/10 rounded-2xl shadow-2xl opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none">
@@ -837,6 +877,12 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      <Leaderboard
+        entries={gameState.leaderboard}
+        isOpen={showLeaderboard}
+        onClose={() => setShowLeaderboard(false)}
+      />
     </div>
   );
 }
