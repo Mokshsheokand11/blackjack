@@ -475,6 +475,7 @@ export default function App() {
         id: Math.random().toString(36).substr(2, 9),
         name: playerName,
         balance: qualifyPoints,
+        stats: newStats,
         timestamp: Date.now()
       });
       newLeaderboard.sort((a, b) => b.balance - a.balance);

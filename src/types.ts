@@ -40,6 +40,7 @@ export interface LeaderboardEntry {
   id: string;
   name: string;
   balance: number;
+  stats: Stats;
   timestamp: number;
 }
 

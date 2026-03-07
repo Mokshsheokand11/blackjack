@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, X, User, Wallet, Calendar } from 'lucide-react';
 import { LeaderboardEntry } from '../types';
+import { StatsPanel } from './StatsPanel';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -16,6 +17,8 @@ interface LeaderboardProps {
 }
 
 export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, onClose, isOpen }) => {
+    const [expandedId, setExpandedId] = React.useState<string | null>(null);
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -60,45 +63,66 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, onClose, isOp
                                     <p className="text-white/40 text-sm italic">No legends yet. Win big to be the first!</p>
                                 </div>
                             ) : (
-                                <div className="space-y-2">
+                                <div className="space-y-4">
                                     {entries.map((entry, index) => (
-                                        <motion.div
-                                            key={entry.id}
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: index * 0.05 }}
-                                            className={cn(
-                                                "group flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
-                                                index === 0 ? "bg-[#F27D26]/5 border-[#F27D26]/20" : "bg-white/5 border-white/5 hover:border-white/10"
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className={cn(
-                                                    "w-8 h-8 rounded-full flex items-center justify-center font-mono font-bold text-xs",
-                                                    index === 0 ? "bg-[#F27D26] text-black" :
-                                                        index === 1 ? "bg-gray-300 text-black" :
-                                                            index === 2 ? "bg-orange-800 text-white" : "bg-white/10 text-white/60"
-                                                )}>
-                                                    {index + 1}
+                                        <div key={entry.id} className="space-y-2">
+                                            <motion.div
+                                                initial={{ opacity: 0, x: -20 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: index * 0.05 }}
+                                                onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}
+                                                className={cn(
+                                                    "group flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 cursor-pointer",
+                                                    index === 0 ? "bg-[#F27D26]/5 border-[#F27D26]/20" : "bg-white/5 border-white/5 hover:border-white/10",
+                                                    expandedId === entry.id && "border-[#F27D26]/40 bg-[#F27D26]/10"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className={cn(
+                                                        "w-8 h-8 rounded-full flex items-center justify-center font-mono font-bold text-xs",
+                                                        index === 0 ? "bg-[#F27D26] text-black" :
+                                                            index === 1 ? "bg-gray-300 text-black" :
+                                                                index === 2 ? "bg-orange-800 text-white" : "bg-white/10 text-white/60"
+                                                    )}>
+                                                        {index + 1}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold flex items-center gap-2">
+                                                            {entry.name}
+                                                            {index === 0 && <Trophy className="w-3 h-3 text-[#F27D26]" />}
+                                                        </span>
+                                                        <span className="text-[10px] text-white/40 flex items-center gap-1">
+                                                            <Calendar className="w-2.5 h-2.5" />
+                                                            {new Date(entry.timestamp).toLocaleDateString()}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-bold flex items-center gap-2">
-                                                        {entry.name}
-                                                        {index === 0 && <Trophy className="w-3 h-3 text-[#F27D26]" />}
-                                                    </span>
-                                                    <span className="text-[10px] text-white/40 flex items-center gap-1">
-                                                        <Calendar className="w-2.5 h-2.5" />
-                                                        {new Date(entry.timestamp).toLocaleDateString()}
-                                                    </span>
+                                                <div className="text-right">
+                                                    <div className="text-[#00FF00] font-mono font-bold text-lg">
+                                                        ₹{entry.balance.toLocaleString()}
+                                                    </div>
+                                                    <div className="text-[9px] text-white/30 uppercase tracking-widest italic group-hover:text-[#F27D26] transition-colors">
+                                                        {expandedId === entry.id ? 'Hide Details' : 'View Details'}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[#00FF00] font-mono font-bold text-lg">
-                                                    ₹{entry.balance.toLocaleString()}
-                                                </div>
-                                                <div className="text-[9px] text-white/30 uppercase tracking-widest">Final Balance</div>
-                                            </div>
-                                        </motion.div>
+                                            </motion.div>
+
+                                            <AnimatePresence>
+                                                {expandedId === entry.id && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: "auto", opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="bg-black/20 border border-white/5 rounded-2xl overflow-hidden"
+                                                    >
+                                                        <div className="p-4">
+                                                            <h4 className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#F27D26] mb-3">Performance at milestone</h4>
+                                                            <StatsPanel stats={entry.stats} />
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
                                     ))}
                                 </div>
                             )}
@@ -106,7 +130,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, onClose, isOp
 
                         {/* Footer */}
                         <div className="p-6 bg-black/40 border-t border-white/5 text-center">
-                            <p className="text-[10px] text-white/30 uppercase tracking-[0.2em]">Your highest score is tracked automatically</p>
+                            <p className="text-[10px] text-white/30 uppercase tracking-[0.2em]">Click on a legend to see how they played</p>
                         </div>
                     </motion.div>
                 </motion.div>
