@@ -531,6 +531,7 @@ export default function App() {
       ...prev,
       balance: prev.balance + amount,
       status: 'betting',
+      bankruptCount: prev.bankruptCount + 1,
       playerHands: [{ cards: [], score: 0, isBusted: false, isBlackjack: false, isStood: false }],
       dealerHand: { cards: [], score: 0, isBusted: false, isBlackjack: false, isStood: false },
       currentBet: 0,
@@ -550,8 +551,7 @@ export default function App() {
   const resetGame = () => {
     setBetChips([]);
     if (gameState.balance < MIN_BET) {
-      const newBankruptCount = gameState.bankruptCount + 1;
-      if (newBankruptCount > 2) {
+      if (gameState.bankruptCount >= 2) {
         setGameState(prev => ({ ...prev, isDead: true }));
         playSound('loss');
         return;
@@ -559,7 +559,6 @@ export default function App() {
 
       setGameState(prev => ({
         ...prev,
-        bankruptCount: newBankruptCount,
         message: 'Bankrupt. Gemini is preparing a new contract...',
       }));
       setShowLoanModal(true);
