@@ -530,6 +530,10 @@ export default function App() {
     setGameState(prev => ({
       ...prev,
       balance: prev.balance + amount,
+      status: 'betting',
+      playerHands: [{ cards: [], score: 0, isBusted: false, isBlackjack: false, isStood: false }],
+      dealerHand: { cards: [], score: 0, isBusted: false, isBlackjack: false, isStood: false },
+      currentBet: 0,
       loan: {
         amount,
         interestRate,
@@ -537,7 +541,7 @@ export default function App() {
         totalRepayment,
         isThreatened: interestRate > 0.1
       },
-      message: `Loan of ₹${amount.toLocaleString()} accepted. You have 3 games to pay back ₹${totalRepayment.toLocaleString()}.`,
+      message: `Contract accepted. Pay back ₹${totalRepayment.toLocaleString()} in 3 games or pay the price.`,
     }));
     setShowLoanModal(false);
     playSound('win');
@@ -556,7 +560,7 @@ export default function App() {
       setGameState(prev => ({
         ...prev,
         bankruptCount: newBankruptCount,
-        message: 'Balance ZERO. You need a loan to continue.',
+        message: 'Bankrupt. Gemini is preparing a new contract...',
       }));
       setShowLoanModal(true);
     } else {

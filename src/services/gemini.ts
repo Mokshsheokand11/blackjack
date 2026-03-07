@@ -32,10 +32,15 @@ export async function getDealerCommentary(
 
     let loanContext = "";
     if (loanInfo) {
-      if (loanInfo.roundsRemaining === 0) {
-        loanContext = `The player has FAILED to repay their loan of ${loanInfo.amount} Rs. Be EXTREMELY threatening. ${loanInfo.interestRate > 0.1 ? "Mention that their home and life are now at stake." : "Issue a stern warning that things will get ugly soon."}`;
-      } else {
-        loanContext = `The player has a loan of ${loanInfo.amount} Rs with ${loanInfo.roundsRemaining} games left to pay it back. Remind them of their debt and the ${loanInfo.interestRate * 100}% interest.`;
+      const isImportantPhase = action === 'deal' || action === 'settle';
+      const isOverdue = loanInfo.roundsRemaining === 0;
+
+      if (isOverdue) {
+        loanContext = `The player has FAILED to repay their loan of ${loanInfo.amount} Rs. Be EXTREMELY threatening. ${loanInfo.interestRate > 0.1 ? "Mention that their home and life are now at stake." : "Issue a stern warning that their luck and time have run out."}`;
+      } else if (isImportantPhase) {
+        loanContext = `The player has a loan of ${loanInfo.amount} Rs with ${loanInfo.roundsRemaining} games left. Remind them of the ${loanInfo.interestRate * 100}% interest.`;
+      } else if (Math.random() > 0.7) {
+        loanContext = `Briefly mention they have a debt to pay.`;
       }
     }
 
@@ -49,6 +54,8 @@ export async function getDealerCommentary(
       Player's balance: ${balance} Rs
       Current bet: ${bet} Rs
       All-in streak: ${allInStreak}
+      
+      Note: If balance is 0 and a round is in progress, it's likely an "All-In". Don't treat them as bankrupt yet unless they actually lose.
       
       Context: ${streakContext} ${loanContext}
       
