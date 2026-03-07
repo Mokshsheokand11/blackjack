@@ -755,18 +755,7 @@ export default function App() {
       {/* Controls Footer */}
       <footer className="p-4 md:p-8 bg-black/80 backdrop-blur-xl border-t border-white/10 sticky bottom-0 z-50">
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
-          {gameState.status === 'betting' ? (
-            <div className="flex justify-center items-center gap-8 py-2">
-              <div className="text-center">
-                <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Your Balance</p>
-                <p className="text-xl font-mono font-bold text-[#00FF00]">₹{gameState.balance.toLocaleString()}</p>
-              </div>
-              <div className="h-8 w-px bg-white/10" />
-              <div className="text-center text-white/60 text-[10px] uppercase tracking-widest">
-                Select your chips and play
-              </div>
-            </div>
-          ) : gameState.status === 'playing' ? (
+          {gameState.status === 'betting' ? null : gameState.status === 'playing' ? (
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <button
                 onClick={handleHit}
