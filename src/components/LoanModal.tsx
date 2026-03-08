@@ -53,7 +53,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({ isOpen, bankruptCount, onT
                                 </h2>
                                 <p className="text-white/60 text-sm leading-relaxed max-w-[280px]">
                                     {bankruptCount === 0
-                                        ? "You're broke. Gemini will lend you credits, but everything comes with a price."
+                                        ? "You're broke. Bank will lend you credits, but everything comes with a price."
                                         : "You're crawling back? Fine. But this time, if you fail, we don't just take your credits. We know where you live."}
                                 </p>
                             </div>
