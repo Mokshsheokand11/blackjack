@@ -550,7 +550,8 @@ export default function App() {
 
   const resetGame = () => {
     setBetChips([]);
-    if (gameState.balance < MIN_BET) {
+    const lastOutcome = gameState.history[0]?.outcome;
+    if (gameState.balance < MIN_BET && lastOutcome === 'loss') {
       if (gameState.bankruptCount >= 2) {
         setGameState(prev => ({ ...prev, isDead: true }));
         playSound('loss');
@@ -755,7 +756,7 @@ export default function App() {
               </button>
             </div>
 
-            {gameState.balance === 0 ? (
+            {gameState.balance < MIN_BET && gameState.history[0]?.outcome === 'loss' ? (
               <button
                 onClick={() => setShowLoanModal(true)}
                 className="w-full max-w-sm py-5 bg-red-600 text-white font-extrabold uppercase tracking-[0.3em] rounded-2xl flex items-center justify-center gap-4 hover:bg-red-500 shadow-[0_15px_40px_rgba(220,38,38,0.4)] transition-all active:scale-[0.98] mt-4"
