@@ -52,6 +52,7 @@ export default function App() {
   const [playerName, setPlayerName] = useState('Local Legend');
   const [showNameModal, setShowNameModal] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
+  const [payLoanOffer, setPayLoanOffer] = useState<{ show: boolean; timer: number }>({ show: false, timer: 0 });
 
   // Persist balance and history
   useEffect(() => {
@@ -93,6 +94,19 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('blackjack_player_name', playerName);
   }, [playerName]);
+
+  // Timer for Pay Loan Offer
+  useEffect(() => {
+    let interval: any;
+    if (payLoanOffer.show && payLoanOffer.timer > 0) {
+      interval = setInterval(() => {
+        setPayLoanOffer(prev => ({ ...prev, timer: prev.timer - 1 }));
+      }, 1000);
+    } else if (payLoanOffer.timer === 0 && payLoanOffer.show) {
+      setPayLoanOffer({ show: false, timer: 0 });
+    }
+    return () => clearInterval(interval);
+  }, [payLoanOffer.show, payLoanOffer.timer]);
 
   const [betChips, setBetChips] = useState<number[]>([]);
   const betInput = betChips.reduce((sum, chip) => sum + chip, 0);
@@ -507,6 +521,17 @@ export default function App() {
       finalLoan = null;
     }
 
+    // Check for Pay Loan Offer (Timed Popup)
+    if (finalLoan && winCount > 0) {
+      const repayment = finalLoan.totalRepayment;
+      const winningAmount = totalPayout;
+      const canAfford = finalBalance >= (repayment + 1000) || winningAmount >= (repayment + 1000);
+
+      if (canAfford) {
+        setPayLoanOffer({ show: true, timer: 5 });
+      }
+    }
+
     updateState({
       playerHands: newPlayerHands,
       balance: finalBalance,
@@ -561,6 +586,7 @@ export default function App() {
       message: `Debt settled! You're in the clear... for now.`,
     });
 
+    setPayLoanOffer({ show: false, timer: 0 });
     playSound('win');
 
     const commentary = await getDealerCommentary(
@@ -851,10 +877,7 @@ export default function App() {
       <footer className="p-4 md:p-8 bg-black/80 backdrop-blur-xl border-t border-white/10 sticky bottom-0 z-50">
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
           {gameState.status === 'betting' ? null : gameState.status === 'playing' ? (
-            <div className={cn(
-              "grid gap-3",
-              gameState.loan ? "grid-cols-2 lg:grid-cols-6" : "grid-cols-2 lg:grid-cols-5"
-            )}>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <button
                 onClick={handleHit}
                 disabled={isProcessing}
@@ -891,24 +914,7 @@ export default function App() {
                 <span>Split</span>
               </button>
 
-              {gameState.loan && (
-                <button
-                  onClick={handlePayLoan}
-                  disabled={isProcessing || gameState.balance < gameState.loan.totalRepayment}
-                  className="py-4 bg-green-600 text-white font-bold uppercase tracking-widest rounded-xl flex flex-col items-center gap-1 hover:bg-green-500 disabled:opacity-20 transition-all active:scale-95 shadow-lg relative group"
-                >
-                  <Landmark className="w-5 h-5" />
-                  <span>Pay Loan</span>
-                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black border border-white/10 px-3 py-1.5 rounded-lg text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
-                    Repay ₹{gameState.loan.totalRepayment.toLocaleString()}
-                  </div>
-                </button>
-              )}
-
-              <div className={cn(
-                "flex flex-col items-center justify-center border border-white/10 rounded-xl bg-white/5",
-                gameState.loan ? "lg:col-span-1 col-span-2" : "md:col-span-1 col-span-2"
-              )}>
+              <div className="flex flex-col items-center justify-center border border-white/10 rounded-xl bg-white/5 md:col-span-1 col-span-2">
                 <p className="text-[10px] text-white/40 uppercase tracking-widest">Active Bet</p>
                 <p className="text-xl font-mono font-bold text-[#F27D26]">₹{gameState.currentBet.toLocaleString()}</p>
               </div>
@@ -1025,6 +1031,53 @@ export default function App() {
           playSound('chip');
         }}
       />
+
+      {/* Pay Loan Offer Timed Popup */}
+      <AnimatePresence>
+        {payLoanOffer.show && gameState.loan && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[150] w-full max-w-sm"
+          >
+            <div className="mx-4 bg-[#151619] border-2 border-green-500/50 rounded-2xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_30px_rgba(34,197,94,0.2)] backdrop-blur-xl relative overflow-hidden">
+              {/* Progress Bar Timer */}
+              <div className="absolute bottom-0 left-0 h-1 bg-green-500 transition-all duration-1000 ease-linear"
+                style={{ width: `${(payLoanOffer.timer / 5) * 100}%` }}
+              />
+
+              <div className="flex flex-col items-center text-center gap-4">
+                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+                  <Landmark className="text-green-500 w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold uppercase tracking-tight text-white mb-1">Settlement Offer</h3>
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    Gemini noticed your win. Clear your debt of <span className="text-green-500 font-mono font-bold">₹{gameState.loan.totalRepayment.toLocaleString()}</span> now?
+                  </p>
+                </div>
+
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => setPayLoanOffer({ show: false, timer: 0 })}
+                    className="flex-1 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
+                  >
+                    Not Now
+                  </button>
+                  <button
+                    onClick={handlePayLoan}
+                    className="flex-[2] py-3 bg-green-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-green-500 shadow-lg shadow-green-900/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Repay Debt</span>
+                    <span className="bg-black/20 px-2 py-0.5 rounded text-[8px]">{payLoanOffer.timer}s</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Dead Screen Overlay */}
       <AnimatePresence>
