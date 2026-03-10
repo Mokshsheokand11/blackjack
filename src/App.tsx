@@ -548,6 +548,34 @@ export default function App() {
     playSound('win');
   };
 
+  const handlePayLoan = async () => {
+    if (!gameState.loan || gameState.balance < gameState.loan.totalRepayment || isProcessing) return;
+
+    setIsProcessing(true);
+    const repaymentAmount = gameState.loan.totalRepayment;
+    const newBalance = gameState.balance - repaymentAmount;
+
+    updateState({
+      balance: newBalance,
+      loan: null,
+      message: `Debt settled! You're in the clear... for now.`,
+    });
+
+    playSound('win');
+
+    const commentary = await getDealerCommentary(
+      gameState.playerHands[gameState.activeHandIndex],
+      gameState.dealerHand,
+      'pay_loan',
+      newBalance,
+      gameState.currentBet,
+      gameState.consecutiveAllIns,
+      null
+    );
+    updateState({ dealerCommentary: commentary });
+    setIsProcessing(false);
+  };
+
   const resetGame = () => {
     setBetChips([]);
     const lastOutcome = gameState.history[0]?.outcome;
@@ -823,7 +851,10 @@ export default function App() {
       <footer className="p-4 md:p-8 bg-black/80 backdrop-blur-xl border-t border-white/10 sticky bottom-0 z-50">
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
           {gameState.status === 'betting' ? null : gameState.status === 'playing' ? (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className={cn(
+              "grid gap-3",
+              gameState.loan ? "grid-cols-2 lg:grid-cols-6" : "grid-cols-2 lg:grid-cols-5"
+            )}>
               <button
                 onClick={handleHit}
                 disabled={isProcessing}
@@ -860,7 +891,24 @@ export default function App() {
                 <span>Split</span>
               </button>
 
-              <div className="flex flex-col items-center justify-center border border-white/10 rounded-xl bg-white/5 md:col-span-1 col-span-2">
+              {gameState.loan && (
+                <button
+                  onClick={handlePayLoan}
+                  disabled={isProcessing || gameState.balance < gameState.loan.totalRepayment}
+                  className="py-4 bg-green-600 text-white font-bold uppercase tracking-widest rounded-xl flex flex-col items-center gap-1 hover:bg-green-500 disabled:opacity-20 transition-all active:scale-95 shadow-lg relative group"
+                >
+                  <Landmark className="w-5 h-5" />
+                  <span>Pay Loan</span>
+                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-black border border-white/10 px-3 py-1.5 rounded-lg text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
+                    Repay ₹{gameState.loan.totalRepayment.toLocaleString()}
+                  </div>
+                </button>
+              )}
+
+              <div className={cn(
+                "flex flex-col items-center justify-center border border-white/10 rounded-xl bg-white/5",
+                gameState.loan ? "lg:col-span-1 col-span-2" : "md:col-span-1 col-span-2"
+              )}>
                 <p className="text-[10px] text-white/40 uppercase tracking-widest">Active Bet</p>
                 <p className="text-xl font-mono font-bold text-[#F27D26]">₹{gameState.currentBet.toLocaleString()}</p>
               </div>
