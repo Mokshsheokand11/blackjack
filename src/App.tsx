@@ -4,7 +4,8 @@ import { Card as CardComponent } from './components/Card';
 import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Landmark, Skull, Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User } from 'lucide-react';
+import { Auth } from './components/Auth';
+import { Landmark, Skull, Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User, LogOut } from 'lucide-react';
 import { StatsPanel } from './components/StatsPanel';
 import { Leaderboard } from './components/Leaderboard';
 import { NameModal } from './components/NameModal';
@@ -20,6 +21,7 @@ function cn(...inputs: ClassValue[]) {
 
 const INITIAL_BALANCE = 50000;
 const MIN_BET = 100;
+const API_URL = 'http://localhost:5000/api';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>({
@@ -53,15 +55,24 @@ export default function App() {
   const [showNameModal, setShowNameModal] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [payLoanOffer, setPayLoanOffer] = useState<{ show: boolean; timer: number }>({ show: false, timer: 0 });
-
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<any>(null);
   // Persist balance and history
   useEffect(() => {
+    const token = localStorage.getItem('blackjack_token');
+    if (!token) {
+      setIsAuthenticated(false);
+      return;
+    }
+
     const savedBalance = localStorage.getItem('blackjack_balance');
     const savedStreak = localStorage.getItem('blackjack_streak');
     const savedHistory = localStorage.getItem('blackjack_history');
     const savedStats = localStorage.getItem('blackjack_stats');
-    const savedLeaderboard = localStorage.getItem('blackjack_leaderboard');
     const savedPlayerName = localStorage.getItem('blackjack_player_name');
+    const savedBankruptCount = localStorage.getItem('blackjack_bankrupt_count');
+    const savedIsDead = localStorage.getItem('blackjack_is_dead');
+    const savedLoan = localStorage.getItem('blackjack_loan');
 
     setGameState(prev => ({
       ...prev,
@@ -69,27 +80,82 @@ export default function App() {
       consecutiveAllIns: savedStreak ? parseInt(savedStreak) : prev.consecutiveAllIns,
       history: savedHistory ? JSON.parse(savedHistory) : prev.history,
       stats: savedStats ? JSON.parse(savedStats) : prev.stats,
-      leaderboard: savedLeaderboard ? JSON.parse(savedLeaderboard) : prev.leaderboard,
-      bankruptCount: localStorage.getItem('blackjack_bankrupt_count') ? parseInt(localStorage.getItem('blackjack_bankrupt_count')!) : prev.bankruptCount,
-      isDead: localStorage.getItem('blackjack_is_dead') === 'true',
-      loan: localStorage.getItem('blackjack_loan') ? JSON.parse(localStorage.getItem('blackjack_loan')!) : prev.loan
+      bankruptCount: savedBankruptCount ? parseInt(savedBankruptCount) : prev.bankruptCount,
+      isDead: savedIsDead === 'true',
+      loan: savedLoan ? JSON.parse(savedLoan) : prev.loan
     }));
 
+    setIsAuthenticated(true);
     if (savedPlayerName) {
       setPlayerName(savedPlayerName);
     }
+
+    const fetchLeaderboard = async () => {
+      try {
+        const response = await fetch(`${API_URL}/leaderboard`);
+        if (response.ok) {
+          const data = await response.json();
+          setGameState(prev => ({ ...prev, leaderboard: data }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch leaderboard:', error);
+      }
+    };
+
+    fetchLeaderboard();
   }, []);
 
+  const handleLogin = (userData: any) => {
+    setUser(userData);
+    setIsAuthenticated(true);
+    setPlayerName(userData.name);
+    setGameState(prev => ({
+      ...prev,
+      balance: userData.balance,
+      stats: userData.stats,
+    }));
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('blackjack_token');
+    setIsAuthenticated(false);
+    setUser(null);
+  };
+
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     localStorage.setItem('blackjack_balance', gameState.balance.toString());
     localStorage.setItem('blackjack_streak', gameState.consecutiveAllIns.toString());
     localStorage.setItem('blackjack_history', JSON.stringify(gameState.history));
     localStorage.setItem('blackjack_stats', JSON.stringify(gameState.stats));
-    localStorage.setItem('blackjack_leaderboard', JSON.stringify(gameState.leaderboard));
     localStorage.setItem('blackjack_bankrupt_count', gameState.bankruptCount.toString());
     localStorage.setItem('blackjack_is_dead', gameState.isDead.toString());
     localStorage.setItem('blackjack_loan', JSON.stringify(gameState.loan));
-  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.leaderboard, gameState.bankruptCount, gameState.isDead, gameState.loan]);
+
+    // Sync to backend
+    const syncData = async () => {
+      const token = localStorage.getItem('blackjack_token');
+      try {
+        await fetch(`${API_URL}/user/update`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            balance: gameState.balance,
+            stats: gameState.stats,
+            bankruptCount: gameState.bankruptCount,
+            isDead: gameState.isDead
+          }),
+        });
+      } catch (error) {
+        console.error('Failed to sync data to server:', error);
+      }
+    };
+    syncData();
+  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.bankruptCount, gameState.isDead, gameState.loan, isAuthenticated]);
 
   useEffect(() => {
     localStorage.setItem('blackjack_player_name', playerName);
@@ -494,15 +560,24 @@ export default function App() {
     const newLeaderboard = [...gameState.leaderboard];
     const qualifyPoints = finalBalance;
 
-    // Check if qualifies for leaderboard (top 10)
+    // Local update for immediate feedback
     if (newLeaderboard.length < 10 || qualifyPoints > newLeaderboard[newLeaderboard.length - 1].balance) {
-      newLeaderboard.push({
-        id: Math.random().toString(36).substr(2, 9),
+      const newEntry = {
         name: playerName,
         balance: qualifyPoints,
         stats: newStats,
         timestamp: Date.now()
-      });
+      };
+
+      const existingIndex = newLeaderboard.findIndex(e => e.name === playerName);
+      if (existingIndex !== -1) {
+        newLeaderboard[existingIndex] = { ...newLeaderboard[existingIndex], ...newEntry };
+      } else {
+        newLeaderboard.push({
+          id: Math.random().toString(36).substr(2, 9),
+          ...newEntry
+        });
+      }
       newLeaderboard.sort((a, b) => b.balance - a.balance);
       if (newLeaderboard.length > 10) newLeaderboard.pop();
     }
@@ -650,20 +725,31 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Your Balance</p>
             <p className="text-2xl font-mono font-bold text-[#00FF00]">₹{gameState.balance.toLocaleString()}</p>
           </div>
-          <button
-            onClick={() => setShowLeaderboard(true)}
-            className="w-10 h-10 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-all active:scale-95 group"
-            title="Hall of Fame"
-          >
-            <Trophy className="text-white/60 group-hover:text-[#F27D26] w-5 h-5 transition-colors" />
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => setShowLeaderboard(true)}
+              className="w-10 h-10 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-all active:scale-95 group"
+              title="Hall of Fame"
+            >
+              <Trophy className="text-white/60 group-hover:text-[#F27D26] w-5 h-5 transition-colors" />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="w-10 h-10 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center hover:bg-red-500/20 active:scale-95 group"
+              title="Logout"
+            >
+              <LogOut className="text-white/60 group-hover:text-red-500 w-5 h-5 transition-colors" />
+            </button>
+          </div>
         </div>
       </header>
+
+      {!isAuthenticated && <Auth onLogin={handleLogin} apiUrl={API_URL} />}
 
       <main className="flex-1 p-4 md:p-8 flex flex-col gap-4 md:gap-6 max-w-7xl mx-auto w-full justify-center">
         {/* Dealer Area */}
