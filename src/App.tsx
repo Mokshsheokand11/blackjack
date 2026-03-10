@@ -541,6 +541,7 @@ export default function App() {
       stats: newStats,
       leaderboard: newLeaderboard,
       loan: finalLoan,
+      bankruptCount: (finalLoan === null && gameState.loan !== null) ? 0 : gameState.bankruptCount,
     });
 
     const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
@@ -583,6 +584,7 @@ export default function App() {
     updateState({
       balance: newBalance,
       loan: null,
+      bankruptCount: 0,
       message: `Debt settled! You're in the clear... for now.`,
     });
 
