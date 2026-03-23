@@ -4,8 +4,7 @@ import { Card as CardComponent } from './components/Card';
 import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
 import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Auth } from './components/Auth';
-import { Landmark, Skull, Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User, LogOut } from 'lucide-react';
+import { Landmark, Skull, Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User } from 'lucide-react';
 import { StatsPanel } from './components/StatsPanel';
 import { Leaderboard } from './components/Leaderboard';
 import { NameModal } from './components/NameModal';
@@ -55,16 +54,8 @@ export default function App() {
   const [showNameModal, setShowNameModal] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [payLoanOffer, setPayLoanOffer] = useState<{ show: boolean; timer: number }>({ show: false, timer: 0 });
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<any>(null);
   // Persist balance and history
   useEffect(() => {
-    const token = localStorage.getItem('blackjack_token');
-    if (!token) {
-      setIsAuthenticated(false);
-      return;
-    }
-
     const savedBalance = localStorage.getItem('blackjack_balance');
     const savedStreak = localStorage.getItem('blackjack_streak');
     const savedHistory = localStorage.getItem('blackjack_history');
@@ -85,7 +76,6 @@ export default function App() {
       loan: savedLoan ? JSON.parse(savedLoan) : prev.loan
     }));
 
-    setIsAuthenticated(true);
     if (savedPlayerName) {
       setPlayerName(savedPlayerName);
     }
@@ -105,26 +95,7 @@ export default function App() {
     fetchLeaderboard();
   }, []);
 
-  const handleLogin = (userData: any) => {
-    setUser(userData);
-    setIsAuthenticated(true);
-    setPlayerName(userData.name);
-    setGameState(prev => ({
-      ...prev,
-      balance: userData.balance,
-      stats: userData.stats,
-    }));
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('blackjack_token');
-    setIsAuthenticated(false);
-    setUser(null);
-  };
-
   useEffect(() => {
-    if (!isAuthenticated) return;
-
     localStorage.setItem('blackjack_balance', gameState.balance.toString());
     localStorage.setItem('blackjack_streak', gameState.consecutiveAllIns.toString());
     localStorage.setItem('blackjack_history', JSON.stringify(gameState.history));
@@ -133,29 +104,26 @@ export default function App() {
     localStorage.setItem('blackjack_is_dead', gameState.isDead.toString());
     localStorage.setItem('blackjack_loan', JSON.stringify(gameState.loan));
 
-    // Sync to backend
-    const syncData = async () => {
-      const token = localStorage.getItem('blackjack_token');
+    // Sync to leaderboard if balance is high
+    const syncLeaderboard = async () => {
       try {
-        await fetch(`${API_URL}/user/update`, {
+        await fetch(`${API_URL}/leaderboard`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
+            name: playerName,
             balance: gameState.balance,
             stats: gameState.stats,
-            bankruptCount: gameState.bankruptCount,
-            isDead: gameState.isDead
           }),
         });
       } catch (error) {
-        console.error('Failed to sync data to server:', error);
+        console.error('Failed to sync leaderboard:', error);
       }
     };
-    syncData();
-  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.bankruptCount, gameState.isDead, gameState.loan, isAuthenticated]);
+    syncLeaderboard();
+  }, [gameState.balance, gameState.consecutiveAllIns, gameState.history, gameState.stats, gameState.bankruptCount, gameState.isDead, gameState.loan, playerName]);
 
   useEffect(() => {
     localStorage.setItem('blackjack_player_name', playerName);
@@ -738,18 +706,9 @@ export default function App() {
             >
               <Trophy className="text-white/60 group-hover:text-[#F27D26] w-5 h-5 transition-colors" />
             </button>
-            <button
-              onClick={handleLogout}
-              className="w-10 h-10 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center hover:bg-red-500/20 active:scale-95 group"
-              title="Logout"
-            >
-              <LogOut className="text-white/60 group-hover:text-red-500 w-5 h-5 transition-colors" />
-            </button>
           </div>
         </div>
       </header>
-
-      {!isAuthenticated && <Auth onLogin={handleLogin} apiUrl={API_URL} />}
 
       <main className="flex-1 p-4 md:p-8 flex flex-col gap-4 md:gap-6 max-w-7xl mx-auto w-full justify-center">
         {/* Dealer Area */}
