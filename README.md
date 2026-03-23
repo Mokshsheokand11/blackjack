@@ -1,5 +1,7 @@
 # BlackJack
 
+ ## NO LOGIN REQUIRED ##
+
 A modern, visually stunning Blackjack web application built with React, Vite, and Tailwind CSS. It features a sleek dark mode UI, smooth animations with Motion (Framer Motion), and an AI-powered dealer with witty commentary using the Gemini API.
 
 ## Features
