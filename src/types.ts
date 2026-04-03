@@ -17,6 +17,14 @@ export interface Hand {
 
 export type GameStatus = 'betting' | 'playing' | 'dealer-turn' | 'settled';
 
+export interface SideBetResult {
+  type: 'perfectPairs' | 'twentyOnePlusThree';
+  amount: number;
+  payout: number;
+  winType: string;
+  isWin: boolean;
+}
+
 export interface RoundResult {
   id: string;
   playerScore: number;
@@ -69,4 +77,9 @@ export interface GameState {
   loan: LoanInfo | null;
   bankruptCount: number;
   isDead: boolean;
+  sideBets: {
+    perfectPairs: number;
+    twentyOnePlusThree: number;
+  };
+  lastSideBetResults: SideBetResult[];
 }

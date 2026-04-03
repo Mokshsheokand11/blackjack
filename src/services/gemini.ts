@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { Card, Hand } from "../types";
+import { Card, Hand, SideBetResult } from "../types";
 
 export async function getDealerCommentary(
   playerHand: Hand,
@@ -8,7 +8,8 @@ export async function getDealerCommentary(
   balance: number,
   bet: number,
   allInStreak: number = 0,
-  loanInfo: any = null
+  loanInfo: any = null,
+  sideBetResults: SideBetResult[] = []
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY || "";
   if (!apiKey) {
@@ -44,6 +45,12 @@ export async function getDealerCommentary(
       }
     }
 
+    let sideBetContext = "";
+    const sideBetWins = sideBetResults.filter(r => r.isWin);
+    if (sideBetWins.length > 0) {
+      sideBetContext = `The player just won a side bet: ${sideBetWins.map(w => `${w.winType} (₹${w.payout})`).join(", ")}. Be impressed by their luck on the side!`;
+    }
+
     const prompt = `
       You are a sophisticated, slightly witty, and professional casino dealer named "Gemini".
       The current game is Blackjack.
@@ -57,7 +64,7 @@ export async function getDealerCommentary(
       
       Note: If balance is 0 and a round is in progress, it's likely an "All-In". Don't treat them as bankrupt yet unless they actually lose.
       
-      Context: ${streakContext} ${loanContext}
+      Context: ${streakContext} ${loanContext} ${sideBetContext}
       
       Provide a short, engaging commentary (max 15 words) as the dealer. 
       Be encouraging but maintain that "house always wins" edge.

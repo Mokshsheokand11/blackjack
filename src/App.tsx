@@ -1,22 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card as CardComponent } from './components/Card';
-import { Card as CardType, GameState, Hand, GameStatus, RoundResult } from './types';
-import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction } from './utils/blackjack';
+import { Card as CardType, GameState, Hand, GameStatus, RoundResult, SideBetResult } from './types';
+import { createDeck, calculateScore, isBlackjack, isBusted, getDealerAction, checkPerfectPairs, checkTwentyOnePlusThree } from './utils/blackjack';
 import { getDealerCommentary } from './services/gemini';
-import { Landmark, Skull, Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User } from 'lucide-react';
+import { Landmark, Skull, Coins, RotateCcw, Play, Hand as HandIcon, Split, Square, TrendingUp, TrendingDown, Info, History, BarChart2, Trophy, User, Sparkles } from 'lucide-react';
 import { StatsPanel } from './components/StatsPanel';
 import { Leaderboard } from './components/Leaderboard';
 import { NameModal } from './components/NameModal';
 import { LoanModal } from './components/LoanModal';
+import { SideBetControls } from './components/SideBetControls';
 import { playSound, soundManager } from './utils/sound';
+import { cn } from './utils/cn';
 import confetti from 'canvas-confetti';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 const INITIAL_BALANCE = 50000;
 const MIN_BET = 100;
@@ -47,6 +43,11 @@ export default function App() {
     loan: null,
     bankruptCount: 0,
     isDead: false,
+    sideBets: {
+      perfectPairs: 0,
+      twentyOnePlusThree: 0,
+    },
+    lastSideBetResults: [],
   });
 
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -73,7 +74,9 @@ export default function App() {
       stats: savedStats ? JSON.parse(savedStats) : prev.stats,
       bankruptCount: savedBankruptCount ? parseInt(savedBankruptCount) : prev.bankruptCount,
       isDead: savedIsDead === 'true',
-      loan: savedLoan ? JSON.parse(savedLoan) : prev.loan
+      loan: savedLoan ? JSON.parse(savedLoan) : prev.loan,
+      sideBets: { perfectPairs: 0, twentyOnePlusThree: 0 },
+      lastSideBetResults: []
     }));
 
     if (savedPlayerName) {
@@ -227,7 +230,61 @@ export default function App() {
       isStood: false,
     };
 
-    const newBalance = gameState.balance - betInput;
+    const totalSideBet = gameState.sideBets.perfectPairs + gameState.sideBets.twentyOnePlusThree;
+    let newBalance = gameState.balance - betInput - totalSideBet;
+
+    // Resolve Side Bets
+    const sideBetResults: SideBetResult[] = [];
+    let sideBetPayout = 0;
+
+    const ppResult = checkPerfectPairs([pCard1, pCard2]);
+    if (gameState.sideBets.perfectPairs > 0) {
+      if (ppResult) {
+        const payout = gameState.sideBets.perfectPairs * ppResult.payout;
+        sideBetPayout += payout;
+        sideBetResults.push({
+          type: 'perfectPairs',
+          amount: gameState.sideBets.perfectPairs,
+          payout,
+          winType: ppResult.type,
+          isWin: true
+        });
+      } else {
+        sideBetResults.push({
+          type: 'perfectPairs',
+          amount: gameState.sideBets.perfectPairs,
+          payout: 0,
+          winType: 'None',
+          isWin: false
+        });
+      }
+    }
+
+    const ttResult = checkTwentyOnePlusThree([pCard1, pCard2], dCard1);
+    if (gameState.sideBets.twentyOnePlusThree > 0) {
+      if (ttResult) {
+        const payout = gameState.sideBets.twentyOnePlusThree * ttResult.payout;
+        sideBetPayout += payout;
+        sideBetResults.push({
+          type: 'twentyOnePlusThree',
+          amount: gameState.sideBets.twentyOnePlusThree,
+          payout,
+          winType: ttResult.type,
+          isWin: true
+        });
+      } else {
+        sideBetResults.push({
+          type: 'twentyOnePlusThree',
+          amount: gameState.sideBets.twentyOnePlusThree,
+          payout: 0,
+          winType: 'None',
+          isWin: false
+        });
+      }
+    }
+
+    newBalance += sideBetPayout;
+    const hasSideBetWin = sideBetResults.some(r => r.isWin);
 
     updateState({
       deck: newDeck,
@@ -237,14 +294,24 @@ export default function App() {
       balance: newBalance,
       currentBet: betInput,
       status: playerHand.isBlackjack ? 'dealer-turn' : 'playing',
-      message: playerHand.isBlackjack ? 'Blackjack!' : 'Your turn...',
+      message: playerHand.isBlackjack ? 'Blackjack!' : (hasSideBetWin ? 'Side Bet Win!' : 'Your turn...'),
       consecutiveAllIns: newConsecutiveAllIns,
+      lastSideBetResults: sideBetResults,
     });
 
     playSound('deal');
+    if (hasSideBetWin) {
+      playSound('win');
+      confetti({
+        particleCount: 50,
+        spread: 30,
+        origin: { y: 0.8 },
+        colors: ['#F27D26', '#3b82f6']
+      });
+    }
 
     // Get initial commentary
-    const commentary = await getDealerCommentary(playerHand, dealerHand, 'deal', newBalance, betInput, newConsecutiveAllIns, gameState.loan);
+    const commentary = await getDealerCommentary(playerHand, dealerHand, 'deal', newBalance, betInput, newConsecutiveAllIns, gameState.loan, sideBetResults);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -283,7 +350,7 @@ export default function App() {
 
     playSound(busted ? 'loss' : 'deal');
 
-    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'hit', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
+    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'hit', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan, gameState.lastSideBetResults);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -306,7 +373,7 @@ export default function App() {
       message: hasMoreHands ? `Hand ${nextHandIndex + 1}'s turn` : 'Dealer\'s turn...',
     });
 
-    const commentary = await getDealerCommentary(newPlayerHands[gameState.activeHandIndex], gameState.dealerHand, 'stand', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
+    const commentary = await getDealerCommentary(newPlayerHands[gameState.activeHandIndex], gameState.dealerHand, 'stand', gameState.balance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan, gameState.lastSideBetResults);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -356,7 +423,7 @@ export default function App() {
       message: busted ? 'Busted!' : (hasMoreHands ? `Hand ${nextHandIndex + 1}'s turn` : 'Dealer\'s turn...'),
     });
 
-    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'double', newBalance, totalBet, gameState.consecutiveAllIns, gameState.loan);
+    const commentary = await getDealerCommentary(updatedHand, gameState.dealerHand, 'double', newBalance, totalBet, gameState.consecutiveAllIns, gameState.loan, gameState.lastSideBetResults);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -403,7 +470,7 @@ export default function App() {
       message: 'Hands split! Playing first hand...',
     });
 
-    const commentary = await getDealerCommentary(hand1, gameState.dealerHand, 'split', gameState.balance - gameState.currentBet, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
+    const commentary = await getDealerCommentary(hand1, gameState.dealerHand, 'split', gameState.balance - gameState.currentBet, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan, gameState.lastSideBetResults);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -587,7 +654,7 @@ export default function App() {
       bankruptCount: (finalLoan === null && gameState.loan !== null) ? 0 : gameState.bankruptCount,
     });
 
-    const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan);
+    const commentary = await getDealerCommentary(newPlayerHands[0], finalDealerHand, 'settle', finalBalance, gameState.currentBet, gameState.consecutiveAllIns, gameState.loan, gameState.lastSideBetResults);
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
   };
@@ -641,7 +708,8 @@ export default function App() {
       newBalance,
       gameState.currentBet,
       gameState.consecutiveAllIns,
-      null
+      null,
+      gameState.lastSideBetResults
     );
     updateState({ dealerCommentary: commentary });
     setIsProcessing(false);
@@ -669,8 +737,32 @@ export default function App() {
         playerHands: [{ cards: [], score: 0, isBusted: false, isBlackjack: false, isStood: false }],
         dealerHand: { cards: [], score: 0, isBusted: false, isBlackjack: false, isStood: false },
         currentBet: 0,
+        sideBets: { perfectPairs: 0, twentyOnePlusThree: 0 },
+        lastSideBetResults: [],
       });
     }
+  };
+
+  const handleAddSideBet = (type: 'perfectPairs' | 'twentyOnePlusThree', amount: number) => {
+    if (gameState.balance >= amount) {
+      setGameState(prev => ({
+        ...prev,
+        sideBets: {
+          ...prev.sideBets,
+          [type]: prev.sideBets[type] + amount
+        }
+      }));
+    }
+  };
+
+  const handleClearSideBet = (type: 'perfectPairs' | 'twentyOnePlusThree') => {
+    setGameState(prev => ({
+      ...prev,
+      sideBets: {
+        ...prev.sideBets,
+        [type]: 0
+      }
+    }));
   };
 
   return (
@@ -820,41 +912,51 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-center items-center gap-4">
-              <button
-                onClick={handleUndoChip}
-                disabled={betChips.length === 0}
-                title="Undo last chip"
-                className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30"
-              >
-                <RotateCcw className="w-6 h-6 text-white/60" />
-              </button>
+            <div className="flex flex-col items-center gap-8">
+              <SideBetControls 
+                balance={gameState.balance - betInput}
+                betAmounts={gameState.sideBets}
+                onAddBet={handleAddSideBet}
+                onClearBet={handleClearSideBet}
+                disabled={isProcessing}
+              />
 
-              {[100, 500, 1000, 10000, 25000].map(amount => (
+              <div className="flex flex-wrap justify-center items-center gap-4">
                 <button
-                  key={amount}
-                  onClick={() => handleAddChip(amount)}
-                  disabled={betInput + amount > gameState.balance}
-                  className={cn(
-                    "w-14 h-14 rounded-full border-[3px] border-dashed border-white/20 font-bold text-sm hover:scale-110 active:scale-95 transition-all disabled:opacity-30 ring-2 ring-transparent hover:ring-white/40",
-                    amount === 100 ? 'bg-gray-100 text-gray-900 border-gray-300 shadow-[0_5px_15px_rgba(255,255,255,0.1)]' :
-                      amount === 500 ? 'bg-red-600 text-white border-red-400 shadow-[0_5px_15px_rgba(220,38,38,0.2)]' :
-                        amount === 1000 ? 'bg-blue-600 text-white border-blue-400 shadow-[0_5px_15px_rgba(37,99,235,0.2)]' :
-                          amount === 10000 ? 'bg-green-600 text-white border-green-400 shadow-[0_5_15px_rgba(16,185,129,0.2)]' :
-                            amount === 25000 ? 'bg-purple-600 text-white border-purple-400 shadow-[0_5px_15px_rgba(147,51,234,0.2)]' : ''
-                  )}
+                  onClick={handleUndoChip}
+                  disabled={betChips.length === 0}
+                  title="Undo last chip"
+                  className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all disabled:opacity-30"
                 >
-                  {amount >= 1000 ? `${amount / 1000}k` : amount}
+                  <RotateCcw className="w-6 h-6 text-white/60" />
                 </button>
-              ))}
 
-              <button
-                onClick={handleAllIn}
-                disabled={betInput === gameState.balance || gameState.balance === 0}
-                className="px-6 py-2 h-14 rounded-full border-2 border-[#F27D26]/30 text-[#F27D26] text-xs font-bold uppercase tracking-widest hover:bg-[#F27D26]/10 active:scale-95 transition-all disabled:opacity-30"
-              >
-                All In
-              </button>
+                {[100, 500, 1000, 10000, 25000].map(amount => (
+                  <button
+                    key={amount}
+                    onClick={() => handleAddChip(amount)}
+                    disabled={betInput + amount > gameState.balance}
+                    className={cn(
+                      "w-14 h-14 rounded-full border-[3px] border-dashed border-white/20 font-bold text-sm hover:scale-110 active:scale-95 transition-all disabled:opacity-30 ring-2 ring-transparent hover:ring-white/40",
+                      amount === 100 ? 'bg-gray-100 text-gray-900 border-gray-300 shadow-[0_5px_15px_rgba(255,255,255,0.1)]' :
+                        amount === 500 ? 'bg-red-600 text-white border-red-400 shadow-[0_5px_15px_rgba(220,38,38,0.2)]' :
+                          amount === 1000 ? 'bg-blue-600 text-white border-blue-400 shadow-[0_5px_15px_rgba(37,99,235,0.2)]' :
+                            amount === 10000 ? 'bg-green-600 text-white border-green-400 shadow-[0_5_15px_rgba(16,185,129,0.2)]' :
+                              amount === 25000 ? 'bg-purple-600 text-white border-purple-400 shadow-[0_5px_15px_rgba(147,51,234,0.2)]' : ''
+                    )}
+                  >
+                    {amount >= 1000 ? `${amount / 1000}k` : amount}
+                  </button>
+                ))}
+
+                <button
+                  onClick={handleAllIn}
+                  disabled={betInput === gameState.balance || gameState.balance === 0}
+                  className="px-6 py-2 h-14 rounded-full border-2 border-[#F27D26]/30 text-[#F27D26] text-xs font-bold uppercase tracking-widest hover:bg-[#F27D26]/10 active:scale-95 transition-all disabled:opacity-30"
+                >
+                  All In
+                </button>
+              </div>
             </div>
 
             {gameState.balance < MIN_BET && gameState.history[0]?.outcome === 'loss' ? (
