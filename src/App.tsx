@@ -13,6 +13,8 @@ import { SideBetControls } from './components/SideBetControls';
 import { playSound, soundManager } from './utils/sound';
 import { cn } from './utils/cn';
 import confetti from 'canvas-confetti';
+import { ThemeSelector } from './components/ThemeSelector';
+import { Palette } from 'lucide-react';
 
 const INITIAL_BALANCE = 50000;
 const MIN_BET = 100;
@@ -54,17 +56,17 @@ export default function App() {
   const [playerName, setPlayerName] = useState('Local Legend');
   const [showNameModal, setShowNameModal] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [payLoanOffer, setPayLoanOffer] = useState<{ show: boolean; timer: number }>({ show: false, timer: 0 });
   // Persist balance and history
   useEffect(() => {
     const savedBalance = localStorage.getItem('blackjack_balance');
     const savedStreak = localStorage.getItem('blackjack_streak');
     const savedHistory = localStorage.getItem('blackjack_history');
-    const savedStats = localStorage.getItem('blackjack_stats');
-    const savedPlayerName = localStorage.getItem('blackjack_player_name');
-    const savedBankruptCount = localStorage.getItem('blackjack_bankrupt_count');
     const savedIsDead = localStorage.getItem('blackjack_is_dead');
     const savedLoan = localStorage.getItem('blackjack_loan');
+    const savedTheme = localStorage.getItem('blackjack_theme');
+    const savedCardBack = localStorage.getItem('blackjack_card_back');
 
     setGameState(prev => ({
       ...prev,
@@ -75,6 +77,8 @@ export default function App() {
       bankruptCount: savedBankruptCount ? parseInt(savedBankruptCount) : prev.bankruptCount,
       isDead: savedIsDead === 'true',
       loan: savedLoan ? JSON.parse(savedLoan) : prev.loan,
+      theme: (savedTheme as any) || 'classic',
+      cardBack: (savedCardBack as any) || 'default',
       sideBets: { perfectPairs: 0, twentyOnePlusThree: 0 },
       lastSideBetResults: []
     }));
@@ -106,6 +110,8 @@ export default function App() {
     localStorage.setItem('blackjack_bankrupt_count', gameState.bankruptCount.toString());
     localStorage.setItem('blackjack_is_dead', gameState.isDead.toString());
     localStorage.setItem('blackjack_loan', JSON.stringify(gameState.loan));
+    localStorage.setItem('blackjack_theme', gameState.theme);
+    localStorage.setItem('blackjack_card_back', gameState.cardBack);
 
     // Sync to leaderboard if balance is high
     const syncLeaderboard = async () => {
@@ -766,7 +772,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#F27D26]/30 overflow-hidden flex flex-col">
+    <div className={cn(
+      "min-h-screen text-white font-sans selection:bg-white/30 overflow-hidden flex flex-col transition-colors duration-700",
+      `theme-${gameState.theme}`,
+      "table-gradient"
+    )}>
       {/* Header */}
       <header className="p-6 border-b border-white/10 flex justify-between items-center bg-black/40 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -798,6 +808,13 @@ export default function App() {
             >
               <Trophy className="text-white/60 group-hover:text-[#F27D26] w-5 h-5 transition-colors" />
             </button>
+            <button
+              onClick={() => setShowThemeSelector(true)}
+              className="w-10 h-10 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-all active:scale-95 group"
+              title="Customize Table"
+            >
+              <Palette className="text-white/60 group-hover:text-[#F27D26] w-5 h-5 transition-colors" />
+            </button>
           </div>
         </div>
       </header>
@@ -824,6 +841,7 @@ export default function App() {
                     <CardComponent
                       card={card}
                       hidden={gameState.status === 'playing' && idx === 1}
+                      cardBack={gameState.cardBack}
                     />
                   </motion.div>
                 ))}
@@ -998,7 +1016,7 @@ export default function App() {
                           animate={{ opacity: 1, y: 0, rotate: 0 }}
                           transition={{ delay: cIdx * 0.1 }}
                         >
-                          <CardComponent card={card} />
+                          <CardComponent card={card} cardBack={gameState.cardBack} />
                         </motion.div>
                       ))}
                     </AnimatePresence>
@@ -1273,6 +1291,17 @@ export default function App() {
               </button>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showThemeSelector && (
+          <ThemeSelector
+            currentTheme={gameState.theme}
+            currentCardBack={gameState.cardBack}
+            onThemeChange={(theme) => updateState({ theme })}
+            onCardBackChange={(cardBack) => updateState({ cardBack })}
+            onClose={() => setShowThemeSelector(false)}
+          />
         )}
       </AnimatePresence>
     </div>

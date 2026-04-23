@@ -60,6 +60,9 @@ export interface LoanInfo {
   isThreatened: boolean;
 }
 
+export type TableTheme = 'classic' | 'midnight' | 'royal' | 'cyber';
+export type CardBack = 'default' | 'gold' | 'black' | 'red';
+
 export interface GameState {
   deck: Card[];
   playerHands: Hand[];
@@ -82,4 +85,6 @@ export interface GameState {
     twentyOnePlusThree: number;
   };
   lastSideBetResults: SideBetResult[];
+  theme: TableTheme;
+  cardBack: CardBack;
 }

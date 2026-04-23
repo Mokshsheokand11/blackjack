@@ -21,4 +21,38 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(242, 125, 38, 0.5);
   }
+
+  /* Table Themes */
+  .theme-classic {
+    --table-bg: #0a3d1d;
+    --table-bg-accent: #0f5c2c;
+    --accent-color: #F27D26;
+  }
+  
+  .theme-midnight {
+    --table-bg: #0f172a;
+    --table-bg-accent: #1e293b;
+    --accent-color: #3b82f6;
+  }
+  
+  .theme-royal {
+    --table-bg: #450a0a;
+    --table-bg-accent: #7f1d1d;
+    --accent-color: #fbbf24;
+  }
+  
+  .theme-cyber {
+    --table-bg: #09090b;
+    --table-bg-accent: #18181b;
+    --accent-color: #f472b6;
+    --glow-color: rgba(244, 114, 182, 0.3);
+  }
+
+  .table-gradient {
+    background: radial-gradient(circle at center, var(--table-bg-accent) 0%, var(--table-bg) 100%);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 20px var(--glow-color, rgba(242, 125, 38, 0.2));
+  }
 }

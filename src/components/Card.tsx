@@ -12,6 +12,7 @@ interface CardProps {
   card: CardType;
   className?: string;
   hidden?: boolean;
+  cardBack?: 'default' | 'gold' | 'black' | 'red';
 }
 
 const SuitIcon = ({ suit }: { suit: CardType['suit'] }) => {
@@ -23,7 +24,16 @@ const SuitIcon = ({ suit }: { suit: CardType['suit'] }) => {
   }
 };
 
-export const Card: React.FC<CardProps> = ({ card, className, hidden }) => {
+export const Card: React.FC<CardProps> = ({ card, className, hidden, cardBack = 'default' }) => {
+  const getCardBackStyles = () => {
+    switch (cardBack) {
+      case 'gold': return "bg-amber-900 border-amber-400 text-amber-200/20";
+      case 'black': return "bg-zinc-900 border-zinc-700 text-zinc-500/20";
+      case 'red': return "bg-rose-900 border-rose-400 text-rose-200/20";
+      default: return "bg-indigo-900 border-white/20 text-white/20";
+    }
+  };
+
   return (
     <div className={cn("relative w-24 h-36 perspective-[1000px]", !hidden && "transition-transform hover:-translate-y-1", className)}>
       <motion.div
@@ -64,13 +74,14 @@ export const Card: React.FC<CardProps> = ({ card, className, hidden }) => {
         {/* Back of Card */}
         <div
           className={cn(
-            "absolute inset-0 w-full h-full bg-indigo-900 rounded-lg border-2 border-white/20 shadow-xl flex items-center justify-center overflow-hidden",
+            "absolute inset-0 w-full h-full rounded-lg border-2 shadow-xl flex items-center justify-center overflow-hidden",
+            getCardBackStyles(),
             "before:absolute before:inset-2 before:border before:border-white/10 before:rounded-md",
             "after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_transparent_70%)] after:from-white/5"
           )}
           style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
         >
-          <div className="text-white/20 text-4xl font-bold rotate-45 select-none">G</div>
+          <div className="text-4xl font-bold rotate-45 select-none">G</div>
         </div>
       </motion.div>
     </div>
