@@ -11,15 +11,7 @@ A modern, visually stunning Blackjack web application built with React, Vite, an
 - **Premium UI:** Beautiful dark theme with glowing accents, smooth transitions, and confetti celebrations upon winning.
 - **Fast Development:** Scaffolded with Vite for lightning-fast HMR and building.
 
-## Tech Stack
 
-- **Framework:** React 19
-- **Build Tool:** Vite
-- **Styling:** Tailwind CSS (v4)
-- **Animations:** Motion (Framer Motion)
-- **Icons:** Lucide React
-- **AI Integrations:** Google GenAI API (`@google/genai`)
-- **Other:** Canvas Confetti
 
 ## Getting Started
 
